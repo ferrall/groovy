@@ -12,6 +12,85 @@ Format:
 
 ---
 
+## 2026-01-05: Production Deployment Configuration for /scribe2/
+
+**Summary**: Configured production build and deployment for www.bahar.co.il/scribe2/ subdirectory with comprehensive documentation and configurable base path.
+
+**Key Changes**:
+- **Vite Configuration** (`vite.config.ts`):
+  - Added `PRODUCTION_BASE_PATH` constant for easy subdirectory configuration
+  - Set base path to `/scribe2/` for production builds
+  - Configured manual chunk splitting (React vendor code separate for better caching)
+  - Build optimizations: minification, tree shaking, content hashing
+
+- **React Router** (`src/App.tsx`):
+  - Added `basename` prop to `BrowserRouter` using `import.meta.env.BASE_URL`
+  - Fixes routing to maintain `/scribe2/` prefix in URLs
+
+- **Sound Loading** (`src/core/DrumSynth.ts`):
+  - Updated to use `import.meta.env.BASE_URL` for dynamic sound paths
+  - Loads sounds from `/scribe2/sounds/` in production, `/sounds/` in dev
+  - Added better error logging for sound loading failures
+
+- **Build Scripts** (`package.json`):
+  - Added `build:prod` - Production build with `/scribe2/` base path
+  - Added `preview:prod` - Preview production build locally
+
+- **Apache Configuration** (`.htaccess`):
+  - Created subdirectory `.htaccess` for React Router support
+  - Gzip compression, asset caching, security headers
+  - MIME type configuration for audio files
+
+- **Documentation**:
+  - `DEPLOYMENT.md` - Comprehensive deployment guide
+  - `CHANGE_BASE_PATH.md` - How to change deployment subdirectory
+  - `DEPLOY_README.md` - Quick upload instructions
+  - `FINAL_DEPLOYMENT_STEPS.md` - Complete deployment checklist
+  - `ROOT_HTACCESS_CHANGES.md` - Root .htaccess modifications
+  - `ROUTER_FIX_UPDATE.md` - Router basename fix details
+  - `UPDATE_DEPLOYMENT.md` - Sound loading fix details
+  - Updated `README.md` with deployment instructions
+
+**Commits**:
+- `2295b2e` - Make base path configurable via PRODUCTION_BASE_PATH constant
+- `4565bc9` - Add router basename fix deployment guide
+- `5a03d29` - Fix React Router basename for /scribe2/ subdirectory
+- `2ef3498` - Add comprehensive final deployment guide
+- `c8d8a80` - Fix vite.svg 404 error and add root .htaccess exclusion guide
+- `a018dba` - Fix sound loading paths for production deployment
+- `1b88308` - Add production build configuration for www.bahar.co.il/scribe2/
+
+**Impact**:
+- ✅ App can now be deployed to subdirectories (not just root)
+- ✅ Single `PRODUCTION_BASE_PATH` constant controls all path configuration
+- ✅ Comprehensive deployment documentation for manual deployment
+- ✅ Build optimizations: ~480KB code + 272KB sounds = ~752KB total
+- ✅ Manual chunk splitting improves caching (React vendor separate)
+- ✅ Easy to change deployment path for different environments
+
+**Deployment Notes**:
+- **Current deployment**: www.bahar.co.il/scribe2/
+- **Build command**: `npm run build:prod`
+- **Preview command**: `npm run preview:prod`
+- **Upload**: `dist/` contents to `/scribe2/` directory on server
+- **Server config**: Upload `.htaccess` to `/scribe2/` directory
+- **Root .htaccess**: Add `RewriteCond %{REQUEST_URI} !^/scribe2/` exclusion
+
+**Testing**:
+- ✅ Tested locally with `npm run preview:prod`
+- ✅ Verified sound loading from `/scribe2/sounds/`
+- ✅ Verified React Router maintains `/scribe2/` prefix
+- ✅ Verified no console errors (vite.svg 404 fixed)
+- ✅ Build size optimized with chunk splitting
+
+**Follow-ups**:
+- Deploy to production server (manual upload)
+- Consider automated deployment with GitHub Actions
+- Monitor bundle size (currently ~480KB, target <500KB)
+- Consider adding favicon (currently removed to avoid 404)
+
+---
+
 ## 2026-01-05: CodeAgent Kit Integration
 
 **Summary**: Embedded codeagent-kit v1.2.0 for project documentation and AI-assisted development workflows.

@@ -39,17 +39,26 @@ Runs ESLint on all source files.
 
 ### Build for Production
 ```bash
+# Development build (base path: '/')
 npm run build
+
+# Production build (base path: '/scribe2/')
+npm run build:prod
 ```
 - Runs TypeScript compiler (`tsc -b`)
 - Builds optimized production bundle with Vite
 - Output: `dist/` directory
+- Production build uses `/scribe2/` base path (configurable in `vite.config.ts`)
 
 ### Preview Production Build
 ```bash
+# Preview development build
 npm run preview
+
+# Preview production build (with /scribe2/ base path)
+npm run preview:prod
 ```
-Serves the production build locally for testing.
+Serves the production build locally for testing at http://localhost:4173/scribe2/
 
 ---
 
@@ -90,10 +99,33 @@ npm run preview:prod
 ```
 
 **Build Output**:
-- Total size: ~480KB (excluding sounds)
-- Sounds: 28 MP3 files
+- Total size: ~480KB code + 272KB sounds = ~752KB total
+- Sounds: 28 MP3 files (272KB)
 - Assets: Minified JS and CSS with content hashes
-- Manual chunks: React vendor code separated for better caching
+- Manual chunks: React vendor code separated for better caching (~178KB)
+- Main app code: ~16KB
+- CSS: ~10KB
+
+**Configuration**:
+- Base path configured in `vite.config.ts` via `PRODUCTION_BASE_PATH` constant
+- Current: `/scribe2/`
+- To change: Edit `PRODUCTION_BASE_PATH` and rebuild
+- See `CHANGE_BASE_PATH.md` for detailed instructions
+
+**Server Requirements**:
+- Apache with `mod_rewrite` enabled
+- Upload `.htaccess` to `/scribe2/` directory for React Router support
+- Add exclusion to root `.htaccess`: `RewriteCond %{REQUEST_URI} !^/scribe2/`
+- See `ROOT_HTACCESS_CHANGES.md` for root .htaccess modifications
+
+**Deployment Documentation** (in project root):
+- `DEPLOYMENT.md` - Comprehensive deployment guide
+- `CHANGE_BASE_PATH.md` - How to change deployment subdirectory
+- `DEPLOY_README.md` - Quick upload instructions
+- `FINAL_DEPLOYMENT_STEPS.md` - Complete deployment checklist
+- `ROOT_HTACCESS_CHANGES.md` - Root .htaccess modifications
+- `ROUTER_FIX_UPDATE.md` - Router basename fix details
+- `UPDATE_DEPLOYMENT.md` - Sound loading fix details
 
 ---
 

@@ -4,6 +4,63 @@ Durable knowledge: decisions, patterns, "how we do things here", gotchas.
 
 ---
 
+## Deployment & Configuration
+
+### Configurable Base Path (2026-01-05)
+**Decision**: Use single `PRODUCTION_BASE_PATH` constant in `vite.config.ts` for all path configuration.
+
+**Reasoning**:
+- Single source of truth for deployment subdirectory
+- Easy to change for different environments (staging, production, etc.)
+- Automatically propagates to Vite, React Router, and asset loading
+- Prevents hardcoded paths scattered throughout codebase
+
+**Pattern**:
+```typescript
+// vite.config.ts
+const PRODUCTION_BASE_PATH = '/scribe2/';  // Change this to deploy elsewhere
+export default defineConfig({
+  base: process.env.NODE_ENV === 'production' ? PRODUCTION_BASE_PATH : '/',
+});
+
+// React Router automatically uses import.meta.env.BASE_URL
+const basename = import.meta.env.BASE_URL;
+<BrowserRouter basename={basename}>
+
+// Asset loading automatically uses import.meta.env.BASE_URL
+const soundPath = `${import.meta.env.BASE_URL}sounds/${fileName}`;
+```
+
+**Gotcha**:
+- Must rebuild after changing `PRODUCTION_BASE_PATH`
+- Path must start and end with `/` (e.g., `/scribe2/`, not `/scribe2`)
+- Development always uses `/` for simplicity
+
+---
+
+### Subdirectory Deployment (2026-01-05)
+**Decision**: Deploy to subdirectory (`/scribe2/`) instead of root, with proper Apache configuration.
+
+**Reasoning**:
+- Allows multiple apps on same domain
+- Follows existing pattern on www.bahar.co.il (MyTrips, fantasybroker, etc.)
+- Requires proper .htaccess configuration for React Router
+
+**Pattern**:
+1. Set `PRODUCTION_BASE_PATH` in `vite.config.ts`
+2. Build with `npm run build:prod`
+3. Upload `dist/` contents to subdirectory on server
+4. Upload `.htaccess` to subdirectory for React Router support
+5. Add exclusion to root `.htaccess`: `RewriteCond %{REQUEST_URI} !^/scribe2/`
+
+**Gotcha**:
+- Root `.htaccess` can interfere with subdirectory routing - must add exclusion
+- React Router needs `basename` prop to maintain subdirectory in URLs
+- All asset paths must use `import.meta.env.BASE_URL`, not hardcoded `/`
+- Sounds must load from `/scribe2/sounds/`, not `/sounds/`
+
+---
+
 ## Architecture Decisions
 
 ### Core Logic Separation (2025-12-XX)

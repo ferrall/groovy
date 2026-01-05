@@ -28,6 +28,29 @@ Groovy is a **modern drum notation editor and player** built with strict separat
 
 ---
 
+## Recent Changes (2026-01-05)
+
+### Production Deployment Configuration
+- ✅ Configured for deployment to www.bahar.co.il/scribe2/
+- ✅ Configurable base path via `PRODUCTION_BASE_PATH` constant in `vite.config.ts`
+- ✅ React Router basename automatically uses base path
+- ✅ Sound loading uses dynamic paths based on base path
+- ✅ Build optimizations: manual chunk splitting, minification, content hashing
+- ✅ Comprehensive deployment documentation (7 guides created)
+- ✅ Apache .htaccess configuration for subdirectory deployment
+- ✅ Build size: ~480KB code + 272KB sounds = ~752KB total
+
+**Deployment Commands**:
+- `npm run build:prod` - Build for production with `/scribe2/` base path
+- `npm run preview:prod` - Preview production build locally
+
+**Documentation**:
+- `DEPLOYMENT.md` - Full deployment guide
+- `CHANGE_BASE_PATH.md` - How to change deployment subdirectory
+- See project root for 7 deployment guides
+
+---
+
 ## Current System State (2026-01-05)
 
 ### ✅ What's Working
