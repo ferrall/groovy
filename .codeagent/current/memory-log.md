@@ -4,6 +4,64 @@ Durable knowledge: decisions, patterns, "how we do things here", gotchas.
 
 ---
 
+## Playback & UI Patterns
+
+### Playback Restart on Division/Time Signature Change (2026-01-05)
+**Decision**: When user changes division or time signature during playback, stop and restart from position 0.
+
+**Reasoning**:
+- Prevents audio/visual desync (visual progress indicator would be at wrong position in new division)
+- Makes the change clear and predictable to the user
+- Avoids confusing mid-loop transitions
+- Ensures timing calculations are correct from the start
+
+**Pattern**:
+```typescript
+const handleDivisionChange = async (division: Division) => {
+  const wasPlaying = isPlaying;
+
+  // Stop playback if playing
+  if (wasPlaying) {
+    stop();
+  }
+
+  // Update groove data
+  const newGroove = { ...groove, division, notes: resizedNotes };
+  setGroove(newGroove);
+  updateGroove(newGroove);
+
+  // Restart playback from beginning if it was playing
+  if (wasPlaying) {
+    await play(newGroove);
+  }
+};
+```
+
+**Gotcha**: Must use `async/await` to ensure proper sequencing of stop → update → play. Without `await`, play might start before stop completes.
+
+---
+
+### Default Sync Mode (2026-01-05)
+**Decision**: Default sync mode is "start" (visual playhead at beginning of note).
+
+**Reasoning**:
+- More intuitive for most users (playhead appears when note starts)
+- Matches common DAW behavior
+- "Middle" was confusing for new users
+
+**Pattern**:
+```typescript
+const [syncMode, setSyncMode] = useState<SyncMode>('start');
+
+useEffect(() => {
+  setEngineSyncMode('start');
+}, [setEngineSyncMode]);
+```
+
+**Gotcha**: Must initialize both React state AND engine state. React state controls UI, engine state controls playback.
+
+---
+
 ## Deployment & Configuration
 
 ### Configurable Base Path (2026-01-05)

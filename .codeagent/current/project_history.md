@@ -12,6 +12,62 @@ Format:
 
 ---
 
+## 2026-01-05: Playback Restart on Division Change & Default Sync Mode
+
+**Summary**: Fixed audio/visual desync when changing division during playback by restarting from beginning. Changed default sync mode from "middle" to "start".
+
+**Key Changes**:
+- **PocApp.tsx** (`handleDivisionChange`, `handleTimeSignatureChange`):
+  - Added playback restart logic when changing division/time signature during playback
+  - Stops current playback, updates groove, restarts from position 0
+  - Prevents audio/visual desync by ensuring visual progress matches audio
+  - Made handlers `async` to properly sequence stop → update → play
+
+- **PocApp.tsx** (default sync mode):
+  - Changed default `syncMode` state from `'middle'` to `'start'`
+  - Added `useEffect` to initialize engine sync mode to `'start'` on mount
+  - Added `useEffect` import from React
+
+- **useGrooveEngine.ts**:
+  - Exposed `play` and `stop` methods from hook (previously only `togglePlayback`)
+  - Allows fine-grained control over playback state
+
+**Issue Closed**:
+- **#1 - Time Signature & Division Logic**: Verified all core logic is complete and working correctly
+  - ✅ Notes per measure calculation
+  - ✅ Division compatibility validation
+  - ✅ Triplet detection and constraints
+  - ✅ Swing support detection
+  - ✅ Note array resizing
+  - ✅ Time signature selector (2-15 beats, 4/8/16 note values)
+  - ✅ Division selector (8, 16, 32, triplets) with compatibility enforcement
+
+**Impact**:
+- ✅ **Fixed critical bug**: Division changes during playback no longer cause audio/visual desync
+- ✅ **Better UX**: Playback restarts from beginning, making the change clear and predictable
+- ✅ **Improved default**: Sync mode "start" is more intuitive than "middle" for most users
+- ✅ **Verified completeness**: Time signature and division logic is production-ready
+
+**Behavior Changes**:
+- **Before**: Changing division during playback continued from current position, causing visual progress to be out of sync with audio
+- **After**: Changing division during playback stops, updates, and restarts from position 0
+- **Default sync mode**: Now "start" instead of "middle" on page load
+
+**Testing**:
+- ✅ Division change during playback (1/8 → 1/16 → 1/32) restarts correctly
+- ✅ Time signature change during playback restarts correctly
+- ✅ Division change while stopped does not start playback
+- ✅ Visual progress always matches audio position
+- ✅ Default sync mode is "start" on page load
+- ✅ All time signature/division combinations work correctly
+
+**Follow-ups**:
+- Consider adding visual feedback (e.g., flash or animation) when playback restarts
+- Consider adding user preference for "restart on change" vs "apply on next loop"
+- Monitor user feedback on default sync mode
+
+---
+
 ## 2026-01-05: Production Deployment Configuration for /scribe2/
 
 **Summary**: Configured production build and deployment for www.bahar.co.il/scribe2/ subdirectory with comprehensive documentation and configurable base path.

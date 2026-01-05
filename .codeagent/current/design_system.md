@@ -161,6 +161,17 @@ UI patterns, design decisions, and style guide for Groovy.
 - Radio buttons or segmented control
 - Options: "Start", "Middle", "End"
 - Selected option highlighted
+- **Default**: "Start" (as of 2026-01-05)
+
+**Sync Modes**:
+- **Start**: Visual playhead appears at the beginning of each note (default)
+- **Middle**: Visual playhead appears in the middle of each note
+- **End**: Visual playhead appears at the end of each note
+
+**Reasoning for Default**:
+- "Start" is more intuitive for most users
+- Matches common DAW behavior
+- Playhead appears when note starts playing
 
 ---
 

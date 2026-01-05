@@ -30,6 +30,20 @@ Groovy is a **modern drum notation editor and player** built with strict separat
 
 ## Recent Changes (2026-01-05)
 
+### Playback Restart on Division Change & Default Sync Mode
+- ✅ **Fixed critical bug**: Division/time signature changes during playback now restart from position 0
+- ✅ **Prevents audio/visual desync**: Visual progress always matches audio position
+- ✅ **Changed default sync mode**: Now "start" instead of "middle" (more intuitive)
+- ✅ **Verified Issue #1 complete**: All time signature and division logic working correctly
+
+**Behavior Changes**:
+- Changing division during playback: Stops → Updates → Restarts from beginning
+- Default sync mode on page load: "Start" (playhead at beginning of note)
+
+**Files Changed**:
+- `src/poc/PocApp.tsx` - Added playback restart logic, changed default sync mode
+- `src/hooks/useGrooveEngine.ts` - Exposed `play` and `stop` methods
+
 ### Production Deployment Configuration
 - ✅ Configured for deployment to www.bahar.co.il/scribe2/
 - ✅ Configurable base path via `PRODUCTION_BASE_PATH` constant in `vite.config.ts`
@@ -100,6 +114,12 @@ Groovy is a **modern drum notation editor and player** built with strict separat
 ---
 
 ## Recent Changes (Newest First)
+
+### 2026-01-05: Playback Restart on Division Change & Default Sync Mode
+- Fixed audio/visual desync when changing division during playback
+- Changed default sync mode from "middle" to "start"
+- Closed Issue #1 (Time Signature & Division Logic verified complete)
+- See `.codeagent/current/project_history.md` for detailed history
 
 ### 2026-01-05: CodeAgent Kit Integration
 - Embedded codeagent-kit v1.2.0 at `.codeagent/`
