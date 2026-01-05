@@ -1,0 +1,268 @@
+# Security
+
+Security considerations, authentication, permissions, secrets handling, and threat notes.
+
+---
+
+## Current Security Posture
+
+**Status**: Static client-side application with no backend, authentication, or user data storage.
+
+**Risk Level**: Low (no sensitive data, no user accounts, no backend)
+
+---
+
+## Authentication & Authorization
+
+### Current (None)
+- No user accounts
+- No authentication required
+- No authorization checks
+- Fully public application
+
+### Future Considerations (If User Accounts Added)
+- **Recommended**: Firebase Authentication or Auth0
+- **MFA**: Enable multi-factor authentication
+- **Session Management**: Use secure, httpOnly cookies
+- **Password Policy**: Enforce strong passwords (if using email/password)
+
+---
+
+## Data Storage
+
+### Current
+- No persistent storage
+- All data in browser memory (lost on refresh)
+- No cookies, localStorage, or sessionStorage used
+
+### Future Considerations (If Saving Patterns)
+- **Client-Side Storage**: Use localStorage for non-sensitive data only
+- **Cloud Storage**: Use Firebase Firestore or similar
+- **Encryption**: Encrypt sensitive data at rest
+- **Data Retention**: Define clear retention policies
+
+---
+
+## API Security (Future)
+
+### If Backend API Added
+- **HTTPS Only**: Enforce TLS 1.2+ for all connections
+- **CORS**: Configure strict CORS policies
+- **Rate Limiting**: Prevent abuse (e.g., 100 requests/minute per IP)
+- **Input Validation**: Sanitize all user inputs
+- **Output Encoding**: Prevent XSS attacks
+- **Authentication**: Use JWT or session tokens
+- **Authorization**: Implement role-based access control (RBAC)
+
+---
+
+## Secrets Management
+
+### Current (None)
+- No API keys
+- No secrets in codebase
+- No environment variables with sensitive data
+
+### Future Considerations
+- **Never commit secrets**: Use `.env` files (add to `.gitignore`)
+- **Environment Variables**: Use `VITE_` prefix for client-side vars
+- **Backend Secrets**: Use secret management service (AWS Secrets Manager, HashiCorp Vault)
+- **API Keys**: Rotate regularly, use least-privilege access
+
+---
+
+## Content Security Policy (CSP)
+
+### Current (None)
+- No CSP headers configured
+
+### Recommended (Future)
+```html
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+               script-src 'self';
+               style-src 'self' 'unsafe-inline';
+               img-src 'self' data:;
+               media-src 'self';
+               connect-src 'self';">
+```
+
+**Note**: May need to adjust for CDNs or external resources.
+
+---
+
+## Cross-Site Scripting (XSS)
+
+### Current Mitigations
+- **React**: Automatically escapes user input in JSX
+- **No `dangerouslySetInnerHTML`**: Not used anywhere
+- **No `eval()`**: Not used anywhere
+
+### Best Practices
+- Always use JSX for rendering user input
+- Sanitize any HTML if `dangerouslySetInnerHTML` is needed
+- Validate and escape all user inputs
+
+---
+
+## Cross-Site Request Forgery (CSRF)
+
+### Current (N/A)
+- No backend API, so no CSRF risk
+
+### Future Considerations (If Backend Added)
+- Use CSRF tokens for state-changing requests
+- Implement SameSite cookie attribute
+- Verify Origin/Referer headers
+
+---
+
+## Dependency Security
+
+### Current Practices
+- Use `npm audit` to check for vulnerabilities
+- Keep dependencies up to date
+
+### Recommended Workflow
+```bash
+# Check for vulnerabilities
+npm audit
+
+# Fix vulnerabilities (automatic)
+npm audit fix
+
+# Fix vulnerabilities (force, may break things)
+npm audit fix --force
+
+# Check for outdated packages
+npm outdated
+```
+
+### Automated Scanning
+- **Dependabot**: Enable on GitHub (auto-creates PRs for updates)
+- **Snyk**: Continuous vulnerability monitoring
+- **GitHub Security Alerts**: Enable in repo settings
+
+---
+
+## Web Audio API Security
+
+### Considerations
+- **User Interaction Required**: Web Audio API requires user gesture before playing audio (prevents auto-play abuse)
+- **Sample Loading**: Samples loaded from `/public/sounds/` (trusted source)
+- **No User-Uploaded Samples**: Currently no risk of malicious audio files
+
+### Future (If User Uploads Allowed)
+- Validate file types (only allow .mp3, .wav, .ogg)
+- Scan for malware
+- Limit file size (e.g., max 5MB per sample)
+- Use Content-Type validation
+
+---
+
+## Client-Side Security
+
+### Current Practices
+- **No Inline Scripts**: All JavaScript in bundled files
+- **No `eval()`**: Not used
+- **No `Function()` constructor**: Not used
+- **React**: Automatic XSS protection
+
+### Browser Security Features
+- **HTTPS**: Required for production (enforced by hosting platforms)
+- **Secure Cookies**: Not used (no cookies)
+- **SameSite**: Not applicable (no cookies)
+
+---
+
+## Third-Party Integrations
+
+### Current (None)
+- No analytics
+- No error tracking
+- No CDNs
+- No external APIs
+
+### Future Considerations
+- **Analytics**: Use privacy-focused analytics (Plausible, Fathom)
+- **Error Tracking**: Use Sentry with data scrubbing
+- **CDNs**: Use Subresource Integrity (SRI) for CDN resources
+
+---
+
+## Threat Model
+
+### Current Threats (Low Risk)
+1. **XSS**: Mitigated by React's automatic escaping
+2. **Dependency Vulnerabilities**: Mitigated by `npm audit`
+3. **Supply Chain Attacks**: Mitigated by using trusted packages
+
+### Future Threats (If Features Added)
+1. **Account Takeover**: If user accounts added
+2. **Data Breach**: If user data stored
+3. **API Abuse**: If backend API added
+4. **CSRF**: If state-changing API endpoints added
+5. **Injection Attacks**: If database added
+
+---
+
+## Incident Response Plan (Future)
+
+### If Security Incident Occurs
+1. **Identify**: Detect and confirm the incident
+2. **Contain**: Isolate affected systems
+3. **Eradicate**: Remove the threat
+4. **Recover**: Restore normal operations
+5. **Lessons Learned**: Document and improve
+
+### Contacts
+- **Developer**: Adar Bahar (adar.bahar@gmail.com)
+- **GitHub**: https://github.com/AdarBahar/groovy
+
+---
+
+## Compliance (Future)
+
+### If User Data Collected
+- **GDPR**: EU data protection regulation
+- **CCPA**: California Consumer Privacy Act
+- **Privacy Policy**: Required if collecting user data
+- **Terms of Service**: Recommended for all web apps
+
+---
+
+## Security Checklist
+
+### Before Production Deployment
+- [ ] Run `npm audit` and fix vulnerabilities
+- [ ] Enable HTTPS (enforced by hosting platform)
+- [ ] Configure CSP headers (if needed)
+- [ ] Remove console.log statements with sensitive data
+- [ ] Verify no secrets in codebase
+- [ ] Enable Dependabot on GitHub
+- [ ] Test in multiple browsers (Chrome, Firefox, Safari)
+- [ ] Check for XSS vulnerabilities (manual testing)
+
+### Ongoing
+- [ ] Monitor `npm audit` regularly
+- [ ] Update dependencies monthly
+- [ ] Review security advisories for dependencies
+- [ ] Monitor error logs (if error tracking added)
+
+---
+
+## Resources
+
+- **OWASP Top 10**: https://owasp.org/www-project-top-ten/
+- **React Security**: https://react.dev/learn/security
+- **Vite Security**: https://vitejs.dev/guide/security.html
+- **npm Security**: https://docs.npmjs.com/auditing-package-dependencies-for-security-vulnerabilities
+
+---
+
+## Notes
+
+- This is a client-side application with no backend, so many security concerns don't apply yet
+- Security posture will need to be re-evaluated if/when backend, user accounts, or data storage are added
+- Always follow principle of least privilege
+- Defense in depth: multiple layers of security
