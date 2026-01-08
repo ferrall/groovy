@@ -30,6 +30,13 @@ Groovy is a **modern drum notation editor and player** built with strict separat
 
 ## Recent Changes
 
+### 2026-01-07: Auto Speed Up & A/V Sync Features
+- ✅ **Auto Speed Up**: Automatic tempo increase during practice (configurable start/target BPM, increment, loops between)
+- ✅ **A/V Sync Offset**: Slider to adjust visual cursor timing (-200ms to +200ms) for latency compensation
+- ✅ **Loop Count Indicator**: Shows current loop number during playback
+- ✅ **Sheet Music Cursor Fixes**: Cursor now travels full measure using barlines for bounds
+- ✅ **NoteIcon Improvements**: Normal notes show filled circle
+
 ### 2026-01-06: URL Encoding & Metadata Sharing (Issue #13)
 - ✅ **URL sharing**: Groove state encoded in URL params for sharing/bookmarking
 - ✅ **Share button**: Copy shareable URL to clipboard with visual feedback

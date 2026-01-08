@@ -4,6 +4,131 @@ Durable knowledge: decisions, patterns, "how we do things here", gotchas.
 
 ---
 
+## CSS & Styling Patterns
+
+### CSS Bundling & Global Scope (2026-01-08)
+**Decision**: Avoid universal CSS resets in component-specific stylesheets.
+
+**Reasoning**:
+- Vite bundles ALL CSS files together regardless of which page imports them
+- Universal selectors (`*`) have low specificity but affect everything
+- CSS cascade order (later = wins) can cause unexpected overrides
+
+**Gotcha**:
+- A `* { margin: 0; padding: 0; }` in `PocApp.css` was overriding Tailwind utilities like `mt-[15px]` on the NewUI page
+- Both had same specificity, but POC reset came later in bundle
+- **Fix**: Remove aggressive resets; let Tailwind's preflight handle normalization
+
+**Pattern**:
+```css
+/* DON'T do this in component CSS - affects entire app */
+* {
+  margin: 0;
+  padding: 0;
+}
+
+/* DO use scoped selectors */
+.poc-app * {
+  /* Only affects .poc-app children */
+}
+```
+
+**Best Practice**:
+- Use Tailwind's preflight for normalization
+- Scope CSS to specific components/containers
+- Avoid universal selectors in non-root CSS files
+
+---
+
+## Practice Features
+
+### Auto Speed Up (2026-01-07)
+**Decision**: Implement automatic tempo increase as a practice feature.
+
+**Reasoning**:
+- Common practice technique: start slow, gradually increase tempo
+- Automated progression removes manual intervention
+- Loop-based increases feel natural musically
+
+**Pattern**:
+```typescript
+// Hook handles all state and timing
+const autoSpeedUp = useAutoSpeedUp({
+  tempo: groove.tempo,
+  onTempoChange: (newTempo) => { ... },
+  isPlaying,
+});
+
+// Check on each loop
+useEffect(() => {
+  if (loopCount > 0) {
+    autoSpeedUp.onLoopComplete();
+  }
+}, [loopCount]);
+```
+
+**Gotcha**:
+- Must sync with groove engine's loop count, not position
+- Auto-disable when target reached to prevent runaway tempo
+- Store config in localStorage for persistence
+
+---
+
+### A/V Sync Offset (2026-01-07)
+**Decision**: Allow users to adjust visual cursor timing relative to audio.
+
+**Reasoning**:
+- Different systems have different audio/visual latency
+- Bluetooth speakers can add significant delay
+- User-adjustable offset provides personalized fix
+
+**Pattern**:
+```typescript
+// Convert ms offset to beat positions
+const msPerPosition = (60000 / tempo) / (division / 4);
+const positionOffset = Math.round(syncOffset / msPerPosition);
+
+// Apply to visual position only (not audio)
+const visualPosition = currentPosition - positionOffset;
+```
+
+**Gotcha**:
+- Positive offset = delay visual (if visual is ahead of sound)
+- Negative offset = advance visual (if sound is ahead of visual)
+- Must wrap position around when it goes negative or exceeds total
+
+---
+
+## Sheet Music Patterns
+
+### Cursor Bounds Calculation (2026-01-07)
+**Decision**: Use barlines for right bound, first note for left bound.
+
+**Reasoning**:
+- abcjs only renders barlines at END of measures, not start
+- First note position accurately marks beat 1
+- Last barline accurately marks end of measure (even with rests)
+
+**Pattern**:
+```typescript
+// Left bound: first note on line
+notes.forEach(note => {
+  if (noteOnLine) minX = Math.min(minX, note.left);
+});
+
+// Right bound: last barline on line
+if (barlinesOnLine.length > 0) {
+  maxX = barlinesOnLine[barlinesOnLine.length - 1].right;
+}
+```
+
+**Gotcha**:
+- Note elements exist only for actual notes, not rests
+- Can't use note indices as position indices (they don't match)
+- Barlines are `.abcjs-bar` class in SVG
+
+---
+
 ## URL Sharing & State Persistence
 
 ### URL Encoding for Groove State (2026-01-06)

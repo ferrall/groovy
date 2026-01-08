@@ -386,6 +386,73 @@ UI patterns, design decisions, and style guide for Groovy.
 
 ---
 
+### AutoSpeedUpConfig (POC) - NEW 2026-01-07
+**Purpose**: Configure automatic tempo increase for practice
+
+**Design**:
+- Card layout with dark background (#2a2a2a)
+- Header with toggle and close button
+- Four numeric inputs: Start BPM, Target BPM, Increment, Loops
+
+**Fields**:
+- **Start BPM**: 40-200, default matches current tempo
+- **Target BPM**: 40-240, default current + 20
+- **Increment**: 1-20 BPM, default 5
+- **Loops per Increment**: 1-20, default 4
+
+**Interaction**:
+- Enable/disable via header toggle
+- ⚙️ button in playback controls opens config
+- Auto-closes when disabled or target reached
+
+---
+
+### AutoSpeedUpIndicator (POC) - NEW 2026-01-07
+**Purpose**: Show auto speed up progress during playback
+
+**Design**:
+- Horizontal bar showing tempo progression
+- Gradient background (purple to blue)
+- Progress fills based on current vs target tempo
+- Shows: current BPM → target BPM, loops until next increase
+
+**States**:
+- Active: Shows progress and countdown
+- Complete: Shows "Target reached!" message
+
+---
+
+### SyncOffsetControl (POC) - NEW 2026-01-07
+**Purpose**: Adjust audio/visual sync timing
+
+**Design**:
+- Compact card with slider and toggle
+- Range: -200ms to +200ms, step 5ms
+- Shows current value with +/- prefix
+- Reset button (↺) to return to 0
+- Enable/disable toggle (✓/✗)
+
+**States**:
+- Enabled: Full color, slider active
+- Disabled: Dimmed, shows "OFF", slider inactive
+
+**Persistence**: Saves to localStorage
+
+---
+
+### LoopCountBadge (POC) - NEW 2026-01-07
+**Purpose**: Display current loop number during playback
+
+**Design**:
+- Badge below playback controls
+- Shows "Loop N" during playback
+- Semi-transparent background
+- Animates in on playback start
+
+**Location**: Below play/stop buttons in PlaybackControls
+
+---
+
 ## Layout Patterns
 
 ### POC Page

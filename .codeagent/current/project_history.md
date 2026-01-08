@@ -12,6 +12,141 @@ Format:
 
 ---
 
+## 2026-01-08: NewUI Page & CSS Conflict Fix
+
+**Summary**: Fixed critical CSS conflict where POC global reset was overriding Tailwind utilities on NewUI page. Added new production UI page with Figma-based components.
+
+**Key Changes**:
+
+- **CSS Conflict Fix** (`src/poc/PocApp.css`):
+  - Removed universal reset `* { margin: 0; padding: 0; }` that was being bundled globally
+  - This reset was overriding Tailwind utilities like `mt-[15px]` due to CSS cascade order
+  - Kept comment noting that Tailwind's preflight handles box-sizing
+
+- **New UI Page** (`src/pages/NewUIPage.tsx`, `src/newUI/`):
+  - Added new production UI page at `/new-ui` route
+  - Components based on Figma design exports
+  - Uses Tailwind CSS for styling with shadcn/ui components
+
+- **Production Page Components** (`src/components/production/`):
+  - Header, Sidebar, BottomToolbar, KeyboardShortcuts components
+  - Enhanced ProductionPage with slider for tempo control
+
+- **Tailwind Configuration**:
+  - Added `src/styles/tailwind.css` for centralized Tailwind directives
+  - Configured content paths for new UI directories
+
+**Files Modified**:
+- `src/poc/PocApp.css` - Removed conflicting universal reset
+- `src/App.tsx` - Added `/new-ui` route
+- Various POC and production components
+
+**Files Created**:
+- `src/pages/NewUIPage.tsx` - New UI page
+- `src/newUI/` - New UI components directory
+- `src/components/production/` - Production UI components
+- `src/styles/tailwind.css` - Tailwind entry point
+
+**Impact**:
+- ✅ Tailwind utilities work correctly on NewUI page
+- ✅ POC page styling unaffected
+- ✅ CSS cascade conflicts resolved
+- ✅ New production UI foundation established
+
+**Testing**:
+- ✅ Build succeeds
+- ✅ Type checks pass
+- ✅ Verified `.mt-[15px]` class present in production CSS
+- ✅ No universal margin reset in bundled CSS
+
+**Root Cause Analysis**:
+The issue was that ALL CSS files get bundled together in Vite, regardless of which page they're used on. The POC's universal reset `* { margin: 0; padding: 0; }` appeared later in the cascade than Tailwind utilities, overriding them due to equal specificity.
+
+**Follow-ups**:
+- Continue building NewUI components
+- Consider CSS module isolation for POC components
+
+---
+
+## 2026-01-07: Auto Speed Up & A/V Sync Features
+
+**Summary**: Added practice-focused features including automatic tempo increase and audio/visual sync offset adjustment. Fixed sheet music cursor accuracy.
+
+**Key Changes**:
+
+- **Auto Speed Up** (`src/hooks/useAutoSpeedUp.ts`, `src/poc/components/AutoSpeedUpConfig.tsx`, `AutoSpeedUpIndicator.tsx`):
+  - New hook for automatic tempo increase during practice
+  - Configurable: start BPM, target BPM, increment amount, loops between increases
+  - Visual indicator shows progress and next target
+  - Enabled/disabled toggle with localStorage persistence
+  - Auto-disables when target tempo reached
+
+- **A/V Sync Offset Control** (`src/poc/components/SyncOffsetControl.tsx`):
+  - Slider to compensate for audio/visual latency (-200ms to +200ms)
+  - Adjusts visual cursor position relative to audio playback
+  - Enable/disable toggle with visual feedback
+  - Persists setting to localStorage
+
+- **Loop Count Indicator** (`src/poc/components/PlaybackControls.tsx`):
+  - Shows current loop count during playback
+  - Displays "Loop N" badge below play/stop buttons
+  - Resets when playback stops
+
+- **Sheet Music Cursor Fixes** (`src/poc/components/SheetMusicDisplay.tsx`):
+  - Fixed: Cursor now uses first note position for left bound (was using clef/time signature)
+  - Fixed: Cursor now uses last barline for right bound (travels full measure even with rests)
+  - Disabled: Broken note highlighting (indices didn't map to positions correctly)
+
+- **NoteIcon Improvements** (`src/poc/components/NoteIcon.tsx`, `NoteIcon.css`):
+  - Normal notes now show filled circle instead of outline
+  - Added `.note-icon-filled` CSS class for filled appearance
+
+- **Types** (`src/types.ts`):
+  - Added `AutoSpeedUpConfig` interface (enabled, startBpm, targetBpm, bpmIncrement, loopsPerIncrement)
+  - Added `AutoSpeedUpState` interface (currentBpm, loopsSinceLastIncrement, totalLoops)
+
+- **GrooveEngine** (`src/core/GrooveEngine.ts`):
+  - Added `loopCount` tracking and `loopCountChange` event
+  - Added `getLoopCount()` method
+  - Loop count resets on stop, increments on each loop completion
+
+**Files Created**: 7
+- `src/hooks/useAutoSpeedUp.ts` - Auto speed up hook
+- `src/poc/components/AutoSpeedUpConfig.tsx` - Configuration UI
+- `src/poc/components/AutoSpeedUpConfig.css` - Config styles
+- `src/poc/components/AutoSpeedUpIndicator.tsx` - Progress indicator
+- `src/poc/components/AutoSpeedUpIndicator.css` - Indicator styles
+- `src/poc/components/SyncOffsetControl.tsx` - Sync offset slider
+- `src/poc/components/SyncOffsetControl.css` - Slider styles
+
+**Files Modified**: 8
+- `src/core/GrooveEngine.ts` - Loop count tracking
+- `src/types.ts` - Auto speed up interfaces
+- `src/poc/PocApp.tsx` - Integrated new features
+- `src/poc/components/PlaybackControls.tsx` - Loop count display
+- `src/poc/components/PlaybackControls.css` - Loop count styling
+- `src/poc/components/SheetMusicDisplay.tsx` - Cursor fixes
+- `src/poc/components/NoteIcon.tsx` - Filled circle for normal
+- `src/poc/components/NoteIcon.css` - Filled icon styling
+
+**Impact**:
+- ✅ Musicians can practice with automatic tempo increase
+- ✅ Users can compensate for system audio/visual latency
+- ✅ Sheet music cursor accurately tracks full measure extent
+- ✅ Loop count provides practice session awareness
+
+**Testing**:
+- ✅ Type checks pass
+- ✅ Build succeeds
+- ✅ Manual testing confirmed features work
+
+**Follow-ups**:
+- Consider adding tempo decrease mode for learning difficult passages
+- Consider adding metronome click during speed-up transitions
+- Implement proper note-to-position mapping for note highlighting
+
+---
+
 ## 2026-01-06: URL Encoding & Metadata Sharing (Issue #13)
 
 **Summary**: Implemented URL encoding for groove state enabling sharing, bookmarking, and metadata (title, author, comments).
