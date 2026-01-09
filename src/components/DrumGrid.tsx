@@ -1,5 +1,5 @@
-import { GrooveData, DrumVoice, MAX_MEASURES } from '../../types';
-import { GrooveUtils, HI_HAT_PATTERNS, SNARE_PATTERNS, KICK_PATTERNS, BulkPattern } from '../../core';
+import { GrooveData, DrumVoice, MAX_MEASURES } from '../types';
+import { GrooveUtils, HI_HAT_PATTERNS, SNARE_PATTERNS, KICK_PATTERNS, BulkPattern } from '../core';
 import { useState, useRef, useEffect } from 'react';
 import BulkOperationsDialog from './BulkOperationsDialog';
 import NoteIcon from './NoteIcon';

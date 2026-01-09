@@ -7,9 +7,9 @@ import { useHistory } from '../hooks/useHistory';
 import { useURLSync } from '../hooks/useURLSync';
 import { useAutoSpeedUp } from '../hooks/useAutoSpeedUp';
 
-// POC components (functional) - drum grid and sheet music
-import DrumGrid from '../poc/components/DrumGrid';
-import SheetMusicDisplay from '../poc/components/SheetMusicDisplay';
+// Core components - drum grid and sheet music
+import { DrumGridDark } from '../components/production/DrumGridDark';
+import SheetMusicDisplay from '../components/SheetMusicDisplay';
 
 // New UI components
 import { Header } from '../components/production/Header';
@@ -287,7 +287,7 @@ export default function ProductionPage() {
 
                   {/* Drum grid */}
                   <div className="flex-1">
-                    <DrumGrid
+                    <DrumGridDark
                       groove={groove}
                       currentPosition={visualPosition}
                       onNoteToggle={handleNoteToggle}
