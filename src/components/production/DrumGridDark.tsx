@@ -5,10 +5,20 @@ import { GrooveUtils, HI_HAT_PATTERNS, SNARE_PATTERNS, KICK_PATTERNS, BulkPatter
 import BulkOperationsDialog from '../BulkOperationsDialog';
 import NoteIcon from '../NoteIcon';
 
+/** A single note change for batch operations */
+export interface NoteChange {
+  voice: DrumVoice;
+  position: number;
+  measureIndex: number;
+  value: boolean;
+}
+
 interface DrumGridDarkProps {
   groove: GrooveData;
   currentPosition: number;
   onNoteToggle: (voice: DrumVoice, position: number, measureIndex: number) => void;
+  /** Batch set multiple notes at once (avoids React state batching issues) */
+  onSetNotes?: (changes: NoteChange[]) => void;
   onPreview: (voice: DrumVoice) => void;
   advancedEditMode?: boolean;
   onMeasureDuplicate?: (measureIndex: number) => void;
@@ -86,6 +96,7 @@ export function DrumGridDark({
   groove,
   currentPosition,
   onNoteToggle,
+  onSetNotes,
   onPreview,
   advancedEditMode = false,
   onMeasureDuplicate,
@@ -326,6 +337,17 @@ export function DrumGridDark({
         });
       });
     } else {
+      // First, clear any existing notes for this row at this position
+      // This ensures only one variation is active per beat per row
+      const row = DRUM_ROWS[rowIndex];
+      row.variations.forEach(v => {
+        v.voices.forEach(voice => {
+          if (measure.notes[voice]?.[position]) {
+            onNoteToggle(voice, position, measureIndex);
+          }
+        });
+      });
+      // Then turn on selected voices
       voices.forEach(voice => onNoteToggle(voice, position, measureIndex));
       onPreview(voices[0]);
     }
@@ -348,16 +370,39 @@ export function DrumGridDark({
     const key = `${measureIndex}-${rowIndex}-${position}`;
     setVoiceSelections(prev => ({ ...prev, [key]: voices }));
 
-    const row = DRUM_ROWS[rowIndex];
-    row.variations.forEach(v => {
-      v.voices.forEach(voice => {
-        if (measure.notes[voice]?.[position]) {
-          onNoteToggle(voice, position, measureIndex);
-        }
-      });
-    });
+    // Use batch update if available to avoid React state batching issues
+    if (onSetNotes) {
+      const changes: NoteChange[] = [];
 
-    voices.forEach(voice => onNoteToggle(voice, position, measureIndex));
+      // Clear any existing notes for this row at this position
+      const row = DRUM_ROWS[rowIndex];
+      row.variations.forEach(v => {
+        v.voices.forEach(voice => {
+          if (measure.notes[voice]?.[position]) {
+            changes.push({ voice, position, measureIndex, value: false });
+          }
+        });
+      });
+
+      // Set the new voices
+      voices.forEach(voice => {
+        changes.push({ voice, position, measureIndex, value: true });
+      });
+
+      onSetNotes(changes);
+    } else {
+      // Fallback to individual toggles (may have stale state issues)
+      const row = DRUM_ROWS[rowIndex];
+      row.variations.forEach(v => {
+        v.voices.forEach(voice => {
+          if (measure.notes[voice]?.[position]) {
+            onNoteToggle(voice, position, measureIndex);
+          }
+        });
+      });
+      voices.forEach(voice => onNoteToggle(voice, position, measureIndex));
+    }
+
     onPreview(voices[0]);
     setContextMenu(null);
   };
@@ -422,44 +467,44 @@ export function DrumGridDark({
         return (
           <div
             key={measureIndex}
-            className="inline-block bg-slate-800 border border-slate-700 rounded-xl p-4"
+            className="inline-block bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4"
           >
             {/* Measure Header */}
             <div className="flex items-center justify-between mb-4">
-              <span className="text-lg font-semibold text-purple-400">
+              <span className="text-lg font-semibold text-purple-600 dark:text-purple-400">
                 Measure {measureIndex + 1}
               </span>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => onMeasureClear?.(measureIndex)}
-                  className="w-8 h-8 flex items-center justify-center rounded hover:bg-slate-700 transition-colors group"
+                  className="w-8 h-8 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors group"
                   title="Clear measure"
                 >
-                  <Trash2 className="w-4 h-4 text-slate-400 group-hover:text-white" />
+                  <Trash2 className="w-4 h-4 text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white" />
                 </button>
                 <button
                   onClick={() => onMeasureDuplicate?.(measureIndex)}
                   disabled={!canAdd}
-                  className="w-8 h-8 flex items-center justify-center rounded hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed group"
+                  className="w-8 h-8 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed group"
                   title="Duplicate measure"
                 >
-                  <Copy className="w-4 h-4 text-slate-400 group-hover:text-white" />
+                  <Copy className="w-4 h-4 text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white" />
                 </button>
                 <button
                   onClick={() => onMeasureAdd?.(measureIndex)}
                   disabled={!canAdd}
-                  className="w-8 h-8 flex items-center justify-center rounded hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed group"
+                  className="w-8 h-8 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed group"
                   title="Add measure"
                 >
-                  <Plus className="w-4 h-4 text-slate-400 group-hover:text-white" />
+                  <Plus className="w-4 h-4 text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white" />
                 </button>
                 <button
                   onClick={() => onMeasureRemove?.(measureIndex)}
                   disabled={!canRemove}
-                  className="w-8 h-8 flex items-center justify-center rounded hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed group"
+                  className="w-8 h-8 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed group"
                   title="Delete measure"
                 >
-                  <X className="w-4 h-4 text-red-400 group-hover:text-red-300" />
+                  <X className="w-4 h-4 text-red-500 dark:text-red-400 group-hover:text-red-600 dark:group-hover:text-red-300" />
                 </button>
               </div>
             </div>
@@ -473,7 +518,7 @@ export function DrumGridDark({
                   <div
                     key={pos}
                     className={`w-12 text-center text-xs font-medium ${
-                      isDownbeat(pos) ? 'text-slate-300' : 'text-slate-500'
+                      isDownbeat(pos) ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-500'
                     }`}
                   >
                     {countLabel}
@@ -491,7 +536,7 @@ export function DrumGridDark({
                     e.preventDefault();
                     onPreview(row.defaultVoices[0]);
                   }}
-                  className="w-24 flex-shrink-0 px-3 py-2 text-right text-sm font-medium text-slate-300 hover:text-white transition-colors"
+                  className="w-24 flex-shrink-0 px-3 py-2 text-right text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
                   title="Click for patterns, right-click to preview"
                 >
                   {row.name}
@@ -510,10 +555,10 @@ export function DrumGridDark({
                   return (
                     <button
                       key={pos}
-                      className={`drum-cell w-12 h-10 border border-slate-600 cursor-pointer transition-all duration-150 flex items-center justify-center relative
-                        ${isActive ? 'bg-purple-600 hover:bg-purple-700' : 'bg-slate-800 hover:bg-slate-700'}
+                      className={`drum-cell w-12 h-10 border cursor-pointer transition-all duration-150 flex items-center justify-center relative
+                        ${isActive ? 'bg-purple-600 hover:bg-purple-700 border-purple-500' : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border-slate-300 dark:border-slate-600'}
                         ${isCurrent ? 'ring-2 ring-purple-400 ring-opacity-50' : ''}
-                        ${isDown ? 'border-l-slate-500' : ''}
+                        ${isDown ? 'border-l-slate-400 dark:border-l-slate-500' : ''}
                       `}
                       data-measure-index={measureIndex}
                       data-row-index={rowIndex}
@@ -544,10 +589,10 @@ export function DrumGridDark({
       {contextMenu?.visible && (
         <div
           ref={contextMenuRef}
-          className="fixed z-50 bg-slate-700 border border-slate-600 rounded-lg shadow-lg py-2 min-w-[200px]"
+          className="fixed z-50 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg py-2 min-w-[200px]"
           style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }}
         >
-          <div className="px-3 py-1 text-xs font-semibold text-slate-300 border-b border-slate-600 mb-1">
+          <div className="px-3 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-600 mb-1">
             {DRUM_ROWS[contextMenu.rowIndex].name} - Select Sound
           </div>
           {DRUM_ROWS[contextMenu.rowIndex].variations.map((variation, index) => {
@@ -558,14 +603,14 @@ export function DrumGridDark({
             return (
               <button
                 key={index}
-                className={`w-full px-3 py-2 text-left text-sm flex items-center justify-between hover:bg-slate-600 transition-colors
-                  ${isSelected ? 'text-purple-400' : 'text-slate-200'}
+                className={`w-full px-3 py-2 text-left text-sm flex items-center justify-between hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors
+                  ${isSelected ? 'text-purple-600 dark:text-purple-400' : 'text-slate-700 dark:text-slate-200'}
                 `}
                 onClick={() => handleVoiceSelect(variation.voices)}
                 onMouseEnter={() => onPreview(variation.voices[0])}
               >
                 <span className="flex items-center gap-2">
-                  {isSelected && <span className="text-purple-400">✓</span>}
+                  {isSelected && <span className="text-purple-600 dark:text-purple-400">✓</span>}
                   {variation.label}
                 </span>
                 {variation.shortcut && (

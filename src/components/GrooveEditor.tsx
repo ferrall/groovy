@@ -5,7 +5,7 @@ import { useGrooveEngine } from '../hooks/useGrooveEngine';
 import { useHistory } from '../hooks/useHistory';
 import { useURLSync } from '../hooks/useURLSync';
 import { useAutoSpeedUp } from '../hooks/useAutoSpeedUp';
-import DrumGrid from './DrumGrid';
+import DrumGrid, { NoteChange } from './DrumGrid';
 import PlaybackControls from './PlaybackControls';
 import TempoControl from './TempoControl';
 import PresetSelector from './PresetSelector';
@@ -144,6 +144,27 @@ function App() {
     setGroove(newGroove);
     updateGroove(newGroove);
   };
+
+  // Batch set multiple notes at once (avoids React state batching issues)
+  const handleSetNotes = useCallback((changes: NoteChange[]) => {
+    const newMeasures = groove.measures.map((measure, measureIdx) => {
+      // Get all changes for this measure
+      const measureChanges = changes.filter(c => c.measureIndex === measureIdx);
+      if (measureChanges.length === 0) return measure;
+
+      // Apply all changes to this measure's notes
+      const newNotes = { ...measure.notes };
+      for (const change of measureChanges) {
+        newNotes[change.voice] = newNotes[change.voice].map((note, i) =>
+          i === change.position ? change.value : note
+        );
+      }
+      return { ...measure, notes: newNotes };
+    });
+    const newGroove = { ...groove, measures: newMeasures };
+    setGroove(newGroove);
+    updateGroove(newGroove);
+  }, [groove, setGroove, updateGroove]);
 
   // Measure manipulation handlers
   const handleMeasureDuplicate = useCallback((measureIndex: number) => {
@@ -493,6 +514,7 @@ function App() {
             groove={groove}
             currentPosition={visualPosition}
             onNoteToggle={handleNoteToggle}
+            onSetNotes={handleSetNotes}
             onPreview={handlePreview}
             advancedEditMode={advancedEditMode}
             onMeasureDuplicate={handleMeasureDuplicate}
