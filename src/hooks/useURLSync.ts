@@ -1,6 +1,6 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useMemo } from 'react';
 import { GrooveData } from '../types';
-import { encodeGrooveToURL, decodeURLToGroove, hasGrooveParams } from '../core/GrooveURLCodec';
+import { encodeGrooveToURL, decodeURLToGroove, hasGrooveParams, validateURLLength, URLValidationResult } from '../core/GrooveURLCodec';
 
 /**
  * Hook for syncing groove state with browser URL
@@ -87,21 +87,31 @@ export function useURLSync(
     return `${window.location.origin}${window.location.pathname}?${encoded}`;
   }, [groove]);
 
-  // Copy URL to clipboard
-  const copyURLToClipboard = useCallback(async (): Promise<boolean> => {
+  // Validate current URL length (memoized for performance)
+  const urlValidation = useMemo((): URLValidationResult => {
+    const url = getShareableURL();
+    return validateURLLength(url);
+  }, [getShareableURL]);
+
+  // Copy URL to clipboard with validation result
+  const copyURLToClipboard = useCallback(async (): Promise<{ success: boolean; validation: URLValidationResult }> => {
+    const url = getShareableURL();
+    const validation = validateURLLength(url);
+
     try {
-      const url = getShareableURL();
       await navigator.clipboard.writeText(url);
-      return true;
+      return { success: true, validation };
     } catch (error) {
       console.warn('Failed to copy URL to clipboard:', error);
-      return false;
+      return { success: false, validation };
     }
   }, [getShareableURL]);
 
   return {
     getShareableURL,
     copyURLToClipboard,
+    /** Current URL validation status - useful for showing warnings in UI */
+    urlValidation,
   };
 }
 

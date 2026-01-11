@@ -62,13 +62,38 @@ export default function ProductionPage() {
   // URL sync
   const { copyURLToClipboard } = useURLSync(groove, setGroove);
 
+  // Centralized engine sync: automatically update engine when groove changes
+  // This eliminates the need for manual updateGroove calls throughout the codebase
+  const prevGrooveRef = useRef<GrooveData | null>(null);
+  useEffect(() => {
+    // Skip if groove hasn't actually changed (reference check first, then compare audio-relevant fields)
+    if (prevGrooveRef.current) {
+      const prev = prevGrooveRef.current;
+      // Only sync if audio-relevant properties changed (not metadata like title/author/comments)
+      const audioChanged =
+        prev.tempo !== groove.tempo ||
+        prev.swing !== groove.swing ||
+        prev.division !== groove.division ||
+        prev.timeSignature.beats !== groove.timeSignature.beats ||
+        prev.timeSignature.noteValue !== groove.timeSignature.noteValue ||
+        prev.measures !== groove.measures; // Reference check for measures array
+
+      if (!audioChanged) {
+        prevGrooveRef.current = groove;
+        return;
+      }
+    }
+    prevGrooveRef.current = groove;
+    updateGroove(groove);
+  }, [groove, updateGroove]);
+
   // Auto Speed Up hook
   const autoSpeedUp = useAutoSpeedUp({
     tempo: groove.tempo,
     onTempoChange: (tempo) => {
       const newGroove = { ...groove, tempo };
       setGroove(newGroove);
-      updateGroove(newGroove);
+      // Engine sync handled by centralized useEffect
     },
     isPlaying,
   });
@@ -121,7 +146,7 @@ export default function ProductionPage() {
         event.preventDefault();
         if (canUndo) {
           undo();
-          setTimeout(() => updateGroove(groove), 0);
+          // Engine sync handled by centralized useEffect
         }
       } else if (
         ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'z') ||
@@ -130,14 +155,14 @@ export default function ProductionPage() {
         event.preventDefault();
         if (canRedo) {
           redo();
-          setTimeout(() => updateGroove(groove), 0);
+          // Engine sync handled by centralized useEffect
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [canUndo, canRedo, undo, redo, updateGroove, groove]);
+  }, [canUndo, canRedo, undo, redo]);
 
   // Note toggle handler
   const handleNoteToggle = (voice: DrumVoice, position: number, measureIndex: number) => {
@@ -153,7 +178,7 @@ export default function ProductionPage() {
     });
     const newGroove = { ...groove, measures: newMeasures };
     setGroove(newGroove);
-    updateGroove(newGroove);
+    // Engine sync handled by centralized useEffect
   };
 
   // Batch set multiple notes at once (avoids React state batching issues)
@@ -172,8 +197,8 @@ export default function ProductionPage() {
     });
     const newGroove = { ...groove, measures: newMeasures };
     setGroove(newGroove);
-    updateGroove(newGroove);
-  }, [groove, setGroove, updateGroove]);
+    // Engine sync handled by centralized useEffect
+  }, [groove, setGroove]);
 
   // Measure manipulation handlers
   const handleMeasureDuplicate = useCallback((measureIndex: number) => {
@@ -186,8 +211,8 @@ export default function ProductionPage() {
     const newMeasures = [...groove.measures.slice(0, measureIndex + 1), newMeasure, ...groove.measures.slice(measureIndex + 1)];
     const newGroove = { ...groove, measures: newMeasures };
     setGroove(newGroove);
-    updateGroove(newGroove);
-  }, [groove, setGroove, updateGroove]);
+    // Engine sync handled by centralized useEffect
+  }, [groove, setGroove]);
 
   const handleMeasureAdd = useCallback((afterIndex: number) => {
     if (groove.measures.length >= MAX_MEASURES) return;
@@ -196,16 +221,16 @@ export default function ProductionPage() {
     const newMeasures = [...groove.measures.slice(0, afterIndex + 1), newMeasure, ...groove.measures.slice(afterIndex + 1)];
     const newGroove = { ...groove, measures: newMeasures };
     setGroove(newGroove);
-    updateGroove(newGroove);
-  }, [groove, setGroove, updateGroove]);
+    // Engine sync handled by centralized useEffect
+  }, [groove, setGroove]);
 
   const handleMeasureRemove = useCallback((measureIndex: number) => {
     if (groove.measures.length <= 1) return;
     const newMeasures = groove.measures.filter((_, idx) => idx !== measureIndex);
     const newGroove = { ...groove, measures: newMeasures };
     setGroove(newGroove);
-    updateGroove(newGroove);
-  }, [groove, setGroove, updateGroove]);
+    // Engine sync handled by centralized useEffect
+  }, [groove, setGroove]);
 
   const handleMeasureClear = useCallback((measureIndex: number) => {
     const notesPerMeasure = GrooveUtils.calcNotesPerMeasure(groove.division, groove.timeSignature.beats, groove.timeSignature.noteValue);
@@ -215,8 +240,8 @@ export default function ProductionPage() {
     });
     const newGroove = { ...groove, measures: newMeasures };
     setGroove(newGroove);
-    updateGroove(newGroove);
-  }, [groove, setGroove, updateGroove]);
+    // Engine sync handled by centralized useEffect
+  }, [groove, setGroove]);
 
   const handleClearAll = useCallback(() => {
     const notesPerMeasure = GrooveUtils.calcNotesPerMeasure(groove.division, groove.timeSignature.beats, groove.timeSignature.noteValue);
@@ -226,8 +251,8 @@ export default function ProductionPage() {
     }));
     const newGroove = { ...groove, measures: newMeasures };
     setGroove(newGroove);
-    updateGroove(newGroove);
-  }, [groove, setGroove, updateGroove]);
+    // Engine sync handled by centralized useEffect
+  }, [groove, setGroove]);
 
   // Cancel count-in helper
   const cancelCountIn = useCallback(() => {
@@ -314,15 +339,16 @@ export default function ProductionPage() {
   const handleTempoChange = (tempo: number) => {
     const newGroove = { ...groove, tempo };
     setGroove(newGroove);
-    updateGroove(newGroove);
+    // Engine sync handled by centralized useEffect
   };
 
   const handleSwingChange = (swing: number) => {
     const newGroove = { ...groove, swing };
     setGroove(newGroove);
-    updateGroove(newGroove);
+    // Engine sync handled by centralized useEffect
   };
 
+  // Metadata handlers - these don't trigger engine sync (no audio impact)
   const handleTitleChange = useCallback((title: string) => {
     const newGroove = { ...groove, title: title || undefined };
     setGroove(newGroove);
@@ -365,7 +391,7 @@ export default function ProductionPage() {
     };
 
     setGroove(newGroove);
-    updateGroove(newGroove);
+    // Engine sync handled by centralized useEffect
     if (wasPlaying) await play(newGroove);
   };
 

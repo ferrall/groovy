@@ -269,12 +269,92 @@ export function decodeURLToGroove(urlOrParams: string | URLSearchParams): Groove
 }
 
 /**
+ * URL length limits and thresholds
+ * - Most browsers support 2000+ characters
+ * - Safe limit for broad compatibility: 2000 chars
+ * - Warning threshold: 1500 chars (use compression)
+ * - Error threshold: 8000 chars (likely to fail)
+ */
+export const URL_LENGTH_LIMITS = {
+  /** Safe URL length for all browsers/servers */
+  SAFE: 2000,
+  /** Warning threshold - consider compression */
+  WARNING: 1500,
+  /** Maximum before likely failure */
+  MAX: 8000,
+} as const;
+
+export type URLValidationResult = {
+  isValid: boolean;
+  length: number;
+  status: 'ok' | 'warning' | 'error';
+  message?: string;
+};
+
+/**
+ * Validate URL length and return status
+ */
+export function validateURLLength(url: string): URLValidationResult {
+  const length = url.length;
+
+  if (length <= URL_LENGTH_LIMITS.WARNING) {
+    return { isValid: true, length, status: 'ok' };
+  }
+
+  if (length <= URL_LENGTH_LIMITS.SAFE) {
+    return {
+      isValid: true,
+      length,
+      status: 'warning',
+      message: `URL is ${length} characters. Some browsers may have issues with long URLs.`,
+    };
+  }
+
+  if (length <= URL_LENGTH_LIMITS.MAX) {
+    return {
+      isValid: true,
+      length,
+      status: 'warning',
+      message: `URL is ${length} characters. This may not work in all browsers. Consider simplifying the groove.`,
+    };
+  }
+
+  return {
+    isValid: false,
+    length,
+    status: 'error',
+    message: `URL is ${length} characters, which exceeds the maximum of ${URL_LENGTH_LIMITS.MAX}. Please simplify the groove or reduce the number of measures.`,
+  };
+}
+
+/**
  * Get full URL with groove encoded as query params
  */
 export function getShareableURL(groove: GrooveData, baseURL?: string): string {
   const base = baseURL || window.location.origin + window.location.pathname;
   const params = encodeGrooveToURL(groove);
   return `${base}?${params}`;
+}
+
+/**
+ * Get shareable URL with validation
+ * Returns the URL along with validation status
+ */
+export function getShareableURLWithValidation(
+  groove: GrooveData,
+  baseURL?: string
+): { url: string; validation: URLValidationResult } {
+  const url = getShareableURL(groove, baseURL);
+  const validation = validateURLLength(url);
+  return { url, validation };
+}
+
+/**
+ * Check if a groove can be safely shared via URL
+ */
+export function canShareGroove(groove: GrooveData): URLValidationResult {
+  const url = getShareableURL(groove);
+  return validateURLLength(url);
 }
 
 /**
@@ -294,6 +374,10 @@ export const GrooveURLCodec = {
   encode: encodeGrooveToURL,
   decode: decodeURLToGroove,
   getShareableURL,
+  getShareableURLWithValidation,
+  canShareGroove,
+  validateURLLength,
   hasGrooveParams,
+  URL_LENGTH_LIMITS,
 };
 

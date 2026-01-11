@@ -44,7 +44,18 @@ export { ABCRenderer, renderABC, renderABCToString, clearRenderedABC } from './A
 export type { ABCRenderOptions, ABCRenderResult } from './ABCRenderer';
 
 // URL Encoding
-export { GrooveURLCodec, encodeGrooveToURL, decodeURLToGroove, getShareableURL, hasGrooveParams } from './GrooveURLCodec';
+export {
+  GrooveURLCodec,
+  encodeGrooveToURL,
+  decodeURLToGroove,
+  getShareableURL,
+  getShareableURLWithValidation,
+  canShareGroove,
+  validateURLLength,
+  hasGrooveParams,
+  URL_LENGTH_LIMITS,
+} from './GrooveURLCodec';
+export type { URLValidationResult } from './GrooveURLCodec';
 
 // Export Utilities
 export {
