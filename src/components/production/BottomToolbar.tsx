@@ -4,17 +4,16 @@ import { Button } from '../ui/button';
 interface BottomToolbarProps {
   onShare: () => void;
   onSave?: () => void;
+  onDownload?: () => void;
+  onPrint?: () => void;
 }
 
-export function BottomToolbar({ onShare, onSave }: BottomToolbarProps) {
-  const handlePrint = () => {
-    window.print();
-  };
+export function BottomToolbar({ onShare, onSave, onDownload, onPrint }: BottomToolbarProps) {
 
   return (
-    <div className="bg-slate-900 border-t border-slate-700 px-6 py-4">
+    <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 px-6 py-4">
       <div className="flex items-center justify-between">
-        <div className="text-slate-400 text-sm">
+        <div className="text-slate-500 dark:text-slate-400 text-sm">
           Groovy by Adar Bahar © 2026
         </div>
 
@@ -22,7 +21,8 @@ export function BottomToolbar({ onShare, onSave }: BottomToolbarProps) {
           <Button
             variant="ghost"
             size="sm"
-            className="text-slate-400 hover:text-white flex flex-col items-center gap-1 h-auto py-2 px-4"
+            onClick={onDownload}
+            className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex flex-col items-center gap-1 h-auto py-2 px-4"
           >
             <Download className="w-5 h-5" />
             <span className="text-xs uppercase">Download</span>
@@ -31,8 +31,8 @@ export function BottomToolbar({ onShare, onSave }: BottomToolbarProps) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={handlePrint}
-            className="text-slate-400 hover:text-white flex flex-col items-center gap-1 h-auto py-2 px-4"
+            onClick={onPrint}
+            className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex flex-col items-center gap-1 h-auto py-2 px-4"
           >
             <Printer className="w-5 h-5" />
             <span className="text-xs uppercase">Print</span>
@@ -42,7 +42,7 @@ export function BottomToolbar({ onShare, onSave }: BottomToolbarProps) {
             variant="ghost"
             size="sm"
             onClick={onShare}
-            className="text-slate-400 hover:text-white flex flex-col items-center gap-1 h-auto py-2 px-4"
+            className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex flex-col items-center gap-1 h-auto py-2 px-4"
           >
             <Share2 className="w-5 h-5" />
             <span className="text-xs uppercase">Share</span>

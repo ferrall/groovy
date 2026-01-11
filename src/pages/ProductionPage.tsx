@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { GrooveData, DEFAULT_GROOVE, DrumVoice, Division, ALL_DRUM_VOICES, createEmptyNotesRecord, MAX_MEASURES } from '../types';
 import { GrooveUtils } from '../core';
 import { useGrooveEngine } from '../hooks/useGrooveEngine';
@@ -14,10 +14,12 @@ import SheetMusicDisplay from '../components/SheetMusicDisplay';
 import { Header } from '../components/production/Header';
 import { Sidebar } from '../components/production/Sidebar';
 import { PlaybackControls } from '../components/production/PlaybackControls';
-import { MetadataFields } from '../components/production/MetadataFields';
+import { MetadataFields, MetadataFieldsRef } from '../components/production/MetadataFields';
 import { BottomToolbar } from '../components/production/BottomToolbar';
 import { KeyboardShortcuts } from '../components/production/KeyboardShortcuts';
 import { ClearButton } from '../components/production/ClearButton';
+import { DownloadModal } from '../components/production/DownloadModal';
+import { PrintPreviewModal } from '../components/production/PrintPreviewModal';
 import { Button } from '../components/ui/button';
 
 import './ProductionPage.css';
@@ -25,6 +27,16 @@ import './ProductionPage.css';
 export default function ProductionPage() {
   const [advancedEditMode] = useState(false);
   const [isNotesOnly, setIsNotesOnly] = useState(false);
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [elapsedTime, setElapsedTime] = useState('0:00');
+  const [countInEnabled, setCountInEnabled] = useState(false);
+  const [isCountingIn, setIsCountingIn] = useState(false);
+  const [countdownNumber, setCountdownNumber] = useState<number | null>(null);
+  const [countingInButton, setCountingInButton] = useState<'play' | 'playPlus' | null>(null);
+  const playStartTimeRef = useRef<number | null>(null);
+  const countInTimeoutRef = useRef<number | null>(null);
+  const metadataFieldsRef = useRef<MetadataFieldsRef>(null);
 
   // Use history hook for undo/redo
   const {
@@ -40,7 +52,6 @@ export default function ProductionPage() {
   const {
     isPlaying,
     currentPosition,
-    togglePlayback,
     updateGroove,
     setSyncMode: setEngineSyncMode,
     playPreview,
@@ -72,6 +83,36 @@ export default function ProductionPage() {
   useEffect(() => {
     setEngineSyncMode('start');
   }, [setEngineSyncMode]);
+
+  // Track elapsed time during playback
+  useEffect(() => {
+    if (isPlaying) {
+      // Start tracking time
+      playStartTimeRef.current = Date.now();
+
+      const updateElapsedTime = () => {
+        if (playStartTimeRef.current) {
+          const elapsed = Date.now() - playStartTimeRef.current;
+          const seconds = Math.floor(elapsed / 1000);
+          const minutes = Math.floor(seconds / 60);
+          const remainingSeconds = seconds % 60;
+          setElapsedTime(`${minutes}:${remainingSeconds.toString().padStart(2, '0')}`);
+        }
+      };
+
+      // Update every 100ms for smooth display
+      const intervalId = setInterval(updateElapsedTime, 100);
+      updateElapsedTime(); // Initial update
+
+      return () => {
+        clearInterval(intervalId);
+      };
+    } else {
+      // Reset when stopped
+      playStartTimeRef.current = null;
+      setElapsedTime('0:00');
+    }
+  }, [isPlaying]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -188,16 +229,83 @@ export default function ProductionPage() {
     updateGroove(newGroove);
   }, [groove, setGroove, updateGroove]);
 
+  // Cancel count-in helper
+  const cancelCountIn = useCallback(() => {
+    if (countInTimeoutRef.current) {
+      clearTimeout(countInTimeoutRef.current);
+      countInTimeoutRef.current = null;
+    }
+    setIsCountingIn(false);
+    setCountdownNumber(null);
+    setCountingInButton(null);
+  }, []);
+
+  // Play count-in clicks (4 beats with metronome sounds)
+  const playCountIn = useCallback(async (button: 'play' | 'playPlus'): Promise<boolean> => {
+    return new Promise((resolve) => {
+      const beatDuration = 60000 / groove.tempo; // ms per beat
+      let currentBeat = 4; // Start at 4, count down to 1
+
+      setIsCountingIn(true);
+      setCountingInButton(button);
+      setCountdownNumber(currentBeat);
+
+      const playBeat = () => {
+        if (currentBeat > 0) {
+          // Play metronome click - same sound for all 4 beats
+          playPreview('hihat-metronome-normal');
+          setCountdownNumber(currentBeat);
+          currentBeat--;
+          countInTimeoutRef.current = window.setTimeout(playBeat, beatDuration);
+        } else {
+          setIsCountingIn(false);
+          setCountdownNumber(null);
+          setCountingInButton(null);
+          resolve(true); // Count-in completed successfully
+        }
+      };
+
+      playBeat();
+    });
+  }, [groove.tempo, playPreview]);
+
   const handlePlay = async () => {
     if (autoSpeedUp.isActive) autoSpeedUp.stop();
-    await togglePlayback(groove);
+
+    // If counting in, cancel it
+    if (isCountingIn) {
+      cancelCountIn();
+      return;
+    }
+
+    if (isPlaying) {
+      // Stop playback
+      stop();
+    } else {
+      // Start playback (with count-in if enabled)
+      if (countInEnabled) {
+        const completed = await playCountIn('play');
+        if (!completed) return; // Count-in was cancelled
+      }
+      await play(groove);
+    }
   };
 
   const handlePlayWithSpeedUp = async () => {
+    // If counting in, cancel it
+    if (isCountingIn) {
+      cancelCountIn();
+      return;
+    }
+
     if (isPlaying) {
       autoSpeedUp.stop();
       stop();
     } else {
+      if (countInEnabled) {
+        const completed = await playCountIn('playPlus');
+        if (!completed) return; // Count-in was cancelled
+      }
       await play(groove);
       autoSpeedUp.start();
     }
@@ -263,7 +371,13 @@ export default function ProductionPage() {
 
   return (
     <div className="h-screen flex flex-col bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-white">
-      <Header />
+      <Header
+        countInEnabled={countInEnabled}
+        onCountInToggle={() => setCountInEnabled(!countInEnabled)}
+        autoSpeedUpConfig={autoSpeedUp.config}
+        onAutoSpeedUpConfigChange={autoSpeedUp.setConfig}
+        onAutoSpeedUpSaveDefault={autoSpeedUp.saveAsDefault}
+      />
 
       <div className="flex-1 flex overflow-hidden">
         <Sidebar
@@ -292,12 +406,15 @@ export default function ProductionPage() {
                 swing={groove.swing}
                 onTempoChange={handleTempoChange}
                 onSwingChange={handleSwingChange}
+                elapsedTime={elapsedTime}
+                countdownNumber={countdownNumber}
+                countingInButton={countingInButton}
               />
 
               {/* Main sequencer area - Sheet music + Grid */}
               <div className="bg-white/50 dark:bg-slate-800/50 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
                 {/* Sheet Music Notation */}
-                <div className="mb-6 p-6 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-600">
+                <div className={`p-6 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-600 ${!isNotesOnly ? 'mb-6' : ''}`}>
                   <SheetMusicDisplay
                     groove={groove}
                     visible={true}
@@ -306,37 +423,40 @@ export default function ProductionPage() {
                   />
                 </div>
 
-                {/* Drum Grid with time signature display */}
-                <div className="flex">
-                  {/* Time signature display */}
-                  <div className="flex flex-col items-center justify-center mr-8 text-slate-900 dark:text-white">
-                    <div className="text-4xl font-bold">{groove.timeSignature.beats}</div>
-                    <div className="w-8 h-px bg-slate-900 dark:bg-white my-1"></div>
-                    <div className="text-4xl font-bold">{groove.timeSignature.noteValue}</div>
-                  </div>
+                {/* Drum Grid with time signature display - hidden in Notes Only mode */}
+                {!isNotesOnly && (
+                  <div className="flex">
+                    {/* Time signature display */}
+                    <div className="flex flex-col items-center justify-center mr-8 text-slate-900 dark:text-white">
+                      <div className="text-4xl font-bold">{groove.timeSignature.beats}</div>
+                      <div className="w-8 h-px bg-slate-900 dark:bg-white my-1"></div>
+                      <div className="text-4xl font-bold">{groove.timeSignature.noteValue}</div>
+                    </div>
 
-                  {/* Drum grid */}
-                  <div className="flex-1">
-                    <DrumGridDark
-                      groove={groove}
-                      currentPosition={visualPosition}
-                      onNoteToggle={handleNoteToggle}
-                      onSetNotes={handleSetNotes}
-                      onPreview={handlePreview}
-                      advancedEditMode={advancedEditMode}
-                      onMeasureDuplicate={handleMeasureDuplicate}
-                      onMeasureAdd={handleMeasureAdd}
-                      onMeasureRemove={handleMeasureRemove}
-                      onMeasureClear={handleMeasureClear}
-                    />
+                    {/* Drum grid */}
+                    <div className="flex-1">
+                      <DrumGridDark
+                        groove={groove}
+                        currentPosition={visualPosition}
+                        onNoteToggle={handleNoteToggle}
+                        onSetNotes={handleSetNotes}
+                        onPreview={handlePreview}
+                        advancedEditMode={advancedEditMode}
+                        onMeasureDuplicate={handleMeasureDuplicate}
+                        onMeasureAdd={handleMeasureAdd}
+                        onMeasureRemove={handleMeasureRemove}
+                        onMeasureClear={handleMeasureClear}
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {!isNotesOnly && (
                 <>
                   {/* Metadata fields */}
                   <MetadataFields
+                    ref={metadataFieldsRef}
                     title={groove.title || ''}
                     author={groove.author || ''}
                     comments={groove.comments || ''}
@@ -369,7 +489,24 @@ export default function ProductionPage() {
         </div>
       </div>
 
-      <BottomToolbar onShare={copyURLToClipboard} />
+      <BottomToolbar
+        onShare={copyURLToClipboard}
+        onDownload={() => setIsDownloadModalOpen(true)}
+        onPrint={() => setIsPrintModalOpen(true)}
+      />
+
+      <DownloadModal
+        groove={groove}
+        isOpen={isDownloadModalOpen}
+        onClose={() => setIsDownloadModalOpen(false)}
+      />
+
+      <PrintPreviewModal
+        groove={groove}
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        onAddTitle={() => metadataFieldsRef.current?.openAndFocusTitle()}
+      />
     </div>
   );
 }

@@ -28,6 +28,7 @@ export { ABCTranscoder, grooveToABC, hasHandsNotes, hasFeetNotes } from './ABCTr
 export type { ABCTranscoderOptions } from './ABCTranscoder';
 export {
   ABC_SYMBOLS,
+  ABC_DECORATIONS,
   URL_TAB_CHARS,
   HANDS_VOICES,
   FEET_VOICES,
@@ -44,3 +45,15 @@ export type { ABCRenderOptions, ABCRenderResult } from './ABCRenderer';
 
 // URL Encoding
 export { GrooveURLCodec, encodeGrooveToURL, decodeURLToGroove, getShareableURL, hasGrooveParams } from './GrooveURLCodec';
+
+// Export Utilities
+export {
+  exportToJSON,
+  downloadAsJSON,
+  triggerDownload,
+  generateFilename,
+  isFormatSupported,
+  getFormatInfo,
+  ALL_EXPORT_FORMATS,
+} from './ExportUtils';
+export type { ExportFormat, JSONExportOptions, ExportMetadata } from './ExportUtils';
