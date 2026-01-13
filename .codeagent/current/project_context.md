@@ -30,6 +30,27 @@ Groovy is a **modern drum notation editor and player** built with strict separat
 
 ## Recent Changes
 
+### 2026-01-12: Export Functionality (Issue #31 - Complete)
+- ✅ **Download Modal**: Full-featured export modal with format selection
+- ✅ **Export Formats**: JSON, MIDI, PDF, PNG, SVG, MP3 (WAV pending)
+- ✅ **ExportUtils.ts**: Comprehensive export utility library (783 lines)
+- ✅ **Sheet Music Export**: SVG/PNG/PDF with header, metadata, QR code, URL
+- ✅ **MIDI Export**: Standard MIDI file with correct drum mapping (GM standard)
+- ✅ **MP3 Export**: Audio rendering using @breezystack/lamejs encoder
+- ✅ **Loop Support**: MIDI/MP3 exports support configurable loop count (1-16)
+- ✅ **Dependencies**: jsPDF, qrcode, midi-writer-js, @breezystack/lamejs
+
+### 2026-01-12: Share Modal (Issue #31 - Partial)
+- ✅ **Share Modal**: 5 tabs for sharing grooves (Link, Social, Embed, QR, Email)
+- ✅ **Social Sharing**: X/Twitter, Facebook, Reddit via popup windows
+- ✅ **Embed Code**: iframe embed for websites/blogs
+- ✅ **QR Code**: Scannable QR for mobile access
+
+### 2026-01-12: Metronome Feature (Issue #4)
+- ✅ **Metronome**: Full metronome with frequency, solo, count-in, volume, offset click
+- ✅ **MetronomeOptionsMenu**: Dropdown component for metronome settings
+- ✅ **localStorage persistence**: Settings saved and restored
+
 ### 2026-01-12: Amplitude Analytics Integration (Issue #51)
 - ✅ **Analytics wrapper**: `src/utils/analytics.ts` with type-safe tracking methods
 - ✅ **Conditional loading**: Script only loads on production domain (bahar.co.il)
@@ -190,12 +211,13 @@ Groovy is a **modern drum notation editor and player** built with strict separat
 
 - Additional drum voices (toms, cymbals, percussion)
 - Advanced features (velocity, articulations, multi-measure)
+- WAV audio export (MP3 is done)
 
 ### 📋 Planned
 
-- MIDI import/export
-- Audio export
+- MIDI import (export is done)
 - Cloud storage and user accounts
+- Short links for sharing (Issue #16)
 
 ---
 
