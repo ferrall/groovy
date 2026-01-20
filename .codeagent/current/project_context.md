@@ -30,6 +30,16 @@ Groovy is a **modern drum notation editor and player** built with strict separat
 
 ## Recent Changes
 
+### 2026-01-20: Performance Optimizations (Issues #63, #64)
+- ✅ **Visual Scheduling (Issue #64)**: Replaced per-note setTimeout with RAF loop
+  - `GrooveEngine.ts`: New `startVisualLoop()` using requestAnimationFrame
+  - Reduces event loop pressure from ~32 timeouts/sec to 1 RAF call
+  - Visual updates capped at 60 FPS (display refresh rate)
+- ✅ **DrumGrid Rendering (Issue #63)**: Added React.memo for cell components
+  - `DrumGridDark.tsx`: Extracted memoized `DrumCell` component
+  - Cells only re-render when their specific props change
+  - Improved responsiveness with high-division grooves
+
 ### 2026-01-17: Security Fixes (Issues #60, #61)
 - ✅ **SVG Sanitization (Issue #60)**: DOMPurify sanitizes all SVG export output
   - Added `sanitizeSVG()` function using DOMPurify with SVG profile
