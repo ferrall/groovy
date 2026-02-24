@@ -7,7 +7,12 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+<<<<<<< Updated upstream
 import { ExternalLink, ChevronDown, Ellipsis } from 'lucide-react';
+=======
+//import { ExternalLink } from 'lucide-react';
+import { ExternalLink,  Ellipsis } from 'lucide-react';  
+>>>>>>> Stashed changes
 import { GrooveData, DEFAULT_GROOVE } from '../types';
 import { useGrooveEngine } from '../hooks/useGrooveEngine';
 import { useURLSync } from '../hooks/useURLSync';
@@ -124,14 +129,25 @@ export default function EmbedPage() {
 
   const grooveTitle = groove.title || 'Drum Groove';
   const grooveAuthor = groove.author ? `by ${groove.author}` : 'Anonymous';
+<<<<<<< Updated upstream
   const grooveDescription = groove.description || 'description';
+=======
+  const grooveDescription = groove.comments || 'description';
+
+>>>>>>> Stashed changes
   // No-op for speed up (not available in embed)
   const handlePlayWithSpeedUp = handlePlay;
 
   return (
+<<<<<<< Updated upstream
     <div className="h-screen flex flex-col embed  overflow-hidden">
       {/* Compact Header with Title */}
       <header className="px-3 py-2 flex flex-col embed:text-black">
+=======
+    <div className="min-h-dvh flex flex-col bg-white  text-slate-900 text-black overflow-hidden">
+      {/* Compact Header with Title */}
+     <header className="px-3 py-2 flex flex-col embed:text-black">
+>>>>>>> Stashed changes
         <div className="flex items-center justify-between">
           {/* Always visible: play button and elapsed time */}
           <div className="flex items-left gap-3">
@@ -143,6 +159,7 @@ export default function EmbedPage() {
                 </button>
               <span className="px-3 text-sm text-slate-500 ">{elapsedTime}</span>
               </span>
+<<<<<<< Updated upstream
           )}
                 {/* Expand/collapse button and title */}
           <div className="flex items-center gap-2">   
@@ -150,14 +167,28 @@ export default function EmbedPage() {
             onClick={() => setIsControlsExpanded(!isControlsExpanded)}
             className="flex items-center gap-2 text-sm font-medium text-slate-500 embed group"
           >
+=======
+              )}
+                {/* Expand/collapse button and title */}
+          <div className="flex items-center gap-2">   
+            <button
+            onClick={() => setIsControlsExpanded(!isControlsExpanded)}
+            className="flex items-center gap-2 text-sm font-medium text-slate-500 embed group"
+            >
+>>>>>>> Stashed changes
             <Ellipsis
               className={`w-4 h-4 transition-transform text-lg text-black duration-200  ${
                 isControlsExpanded ? 'rotate-0' : '-rotate-90'
               }`}
             />
             <span className="hidden group-hover:inline text-black text-xs">Set Tempo & Swing</span>
+<<<<<<< Updated upstream
           </button>
                     </div>
+=======
+            </button>
+          </div>
+>>>>>>> Stashed changes
         </div>
         <h2 className=" truncate">{grooveTitle}</h2>
           <a
@@ -168,6 +199,7 @@ export default function EmbedPage() {
             >
           <span className="hidden group-hover:inline text-xs">Edit Groove</span>
           <ExternalLink className="w-3 h-3 group-hover:hidden" />
+<<<<<<< Updated upstream
         </a>
         </div>
          <div className="flex items-center justify-between text-s">
@@ -175,6 +207,15 @@ export default function EmbedPage() {
         </div>
       </header>
       {/* Sheet Music */}
+=======
+          </a>
+        </div>
+         <div className="flex items-center justify-between text-s">
+            <div>{grooveAuthor}</div><div>{grooveDescription}</div>
+          </div>
+        </header>
+       {/* Sheet Music */}
+>>>>>>> Stashed changes
       <div className="flex-1 overflow-auto embed ">
           <SheetMusicDisplay
             groove={groove}
@@ -182,9 +223,15 @@ export default function EmbedPage() {
             currentPosition={visualPosition}
             isPlaying={isPlaying}
           />
+<<<<<<< Updated upstream
        {/* Playback Controls - Full toolbar */}
       {isControlsExpanded && (
           <div className="mt-3 embed:text-black">
+=======
+          {/* Playback Controls - Full toolbar */}
+          {isControlsExpanded && (
+            <div className="mt-3 embed:text-black">
+>>>>>>> Stashed changes
             <PlaybackControls
               isPlaying={isPlaying}
               onPlay={handlePlay}
@@ -199,9 +246,13 @@ export default function EmbedPage() {
               isEmbedded={true}
             />
           </div>
+<<<<<<< Updated upstream
           
         )}
+=======
+          )}
+>>>>>>> Stashed changes
       </div>
     </div>
-  );
-}
+    );
+  }
