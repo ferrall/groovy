@@ -16,9 +16,7 @@ interface PlaybackControlsProps {
   elapsedTime?: string;
   countdownNumber?: number | null;
   countingInButton?: 'play' | 'playPlus' | null;
-  midiConnected?: boolean;
-  trackingEnabled?: boolean;
-  onTrackingToggle?: () => void;
+  isEmbedded?: boolean;
 }
 
 export function PlaybackControls({
@@ -35,9 +33,6 @@ export function PlaybackControls({
   countdownNumber,
   countingInButton,
   isEmbedded = false,
-  midiConnected = false,
-  trackingEnabled = false,
-  onTrackingToggle,
 }: PlaybackControlsProps) {
   return (
     <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-8">
@@ -92,7 +87,9 @@ export function PlaybackControls({
           <div className="text-xs text-purple-600 dark:text-purple-400 uppercase tracking-wider">
             {isPlaying ? 'Loop Active' : 'Stopped'}
           </div>
-        </div>
+        </div>        
+      </div>)}
+
       </div>
        {/* Sliders - stacked on mobile, side by side on desktop */}
       {/* Sliders - stacked on mobile, side by side on desktop */}
