@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { GrooveData, DEFAULT_GROOVE, DrumVoice, Division, ALL_DRUM_VOICES, MetronomeFrequency, TimeSignature } from '../types';
+import { GrooveData, DEFAULT_GROOVE, DrumVoice, Division, ALL_DRUM_VOICES, TimeSignature, StickingValue, createEmptySticking } from '../types';
 import { GrooveUtils, decodeGroove, SavedGroove } from '../core';
 import { useGrooveEngine } from '../hooks/useGrooveEngine';
 import { useHistory } from '../hooks/useHistory';
@@ -14,7 +14,7 @@ import { useMIDIFeedback } from '../hooks/useMIDIFeedback';
 import { useMIDITracking } from '../hooks/useMIDITracking';
 import { useMIDITrackingFeedback } from '../hooks/useMIDITrackingFeedback';
 import * as analytics from '../utils/analytics';
-import { DrumSynth } from '../core/DrumSynth';
+import { frequencyToMetronomeOption, metronomeOptionToFrequency } from '../utils/metronomeConstants';
 import '../styles/midi.css';
 
 // Core components - drum grid and sheet music
@@ -37,35 +37,94 @@ import { SaveGrooveModal } from '../components/production/SaveGrooveModal';
 import { GrooveLibraryModal } from '../components/production/GrooveLibraryModal';
 import { ShareModal } from '../components/production/ShareModal';
 import { TimeSignatureSelectorModal } from '../components/production/TimeSignatureSelectorModal';
-import { Button } from '../components/ui/button';
-
 import './ProductionPage.css';
-
-// Helper to convert MetronomeFrequency to Header format
-function frequencyToMetronomeOption(freq: MetronomeFrequency): 'off' | '4th' | '8th' | '16th' {
-  switch (freq) {
-    case 0: return 'off';
-    case 4: return '4th';
-    case 8: return '8th';
-    case 16: return '16th';
-    default: return 'off';
-  }
-}
-
-// Helper to convert Header format to MetronomeFrequency
-function metronomeOptionToFrequency(option: 'off' | '4th' | '8th' | '16th'): MetronomeFrequency {
-  switch (option) {
-    case 'off': return 0;
-    case '4th': return 4;
-    case '8th': return 8;
-    case '16th': return 16;
-    default: return 0;
-  }
-}
 
 const TITLE_MAX_LENGTH = 50;
 const AUTHOR_MAX_LENGTH = 50;
 const COMMENT_MAX_LENGTH = 300;
+
+/**
+ * Compare two notes records for exact equality across all drum voices.
+ * Two measures are considered identical if every voice has matching boolean arrays.
+ * Articulation differences (hihat-open vs hihat-closed) count as different because
+ * they are separate DrumVoice values (D-05).
+ */
+function areNotesIdentical(
+  notes1: Record<DrumVoice, boolean[]>,
+  notes2: Record<DrumVoice, boolean[]>
+): boolean {
+  return ALL_DRUM_VOICES.every(voice => {
+    const arr1 = notes1[voice];
+    const arr2 = notes2[voice];
+    if (!arr1 || !arr2) return arr1 === arr2;
+    if (arr1.length !== arr2.length) return false;
+    return arr1.every((v, i) => v === arr2[i]);
+  });
+}
+
+/**
+ * Find measures with the same note pattern as the target measure.
+ * Similarity criteria (per D-05):
+ * - Same time signature (beats x noteValue)
+ * - Same subdivision count (notesPerMeasure)
+ * - Identical note patterns across all voices (including articulation)
+ *
+ * Returns indices of similar measures, excluding the target measure itself.
+ */
+export function findSimilarMeasures(groove: GrooveData, targetMeasureIndex: number): number[] {
+  const target = groove.measures[targetMeasureIndex];
+  if (!target) return [];
+
+  const targetTs = target.timeSignature || groove.timeSignature;
+  const targetNotesPerMeasure = GrooveUtils.calcNotesPerMeasure(
+    groove.division,
+    targetTs.beats,
+    targetTs.noteValue
+  );
+
+  const similar: number[] = [];
+  for (let i = 0; i < groove.measures.length; i++) {
+    if (i === targetMeasureIndex) continue;
+    const candidate = groove.measures[i];
+    const candidateTs = candidate.timeSignature || groove.timeSignature;
+
+    // Check time signature match (beats and noteValue must both match)
+    if (
+      candidateTs.beats !== targetTs.beats ||
+      candidateTs.noteValue !== targetTs.noteValue
+    ) {
+      continue;
+    }
+
+    // Check subdivision count match
+    const candidateNotesPerMeasure = GrooveUtils.calcNotesPerMeasure(
+      groove.division,
+      candidateTs.beats,
+      candidateTs.noteValue
+    );
+    if (candidateNotesPerMeasure !== targetNotesPerMeasure) continue;
+
+    // Check note pattern identity across all voices
+    if (areNotesIdentical(target.notes, candidate.notes)) {
+      similar.push(i);
+    }
+  }
+
+  return similar;
+}
+
+/**
+ * Apply the sticking from a source measure to all similar measures.
+ * Returns the set of measure indices that were updated (for feedback messages).
+ * Returns empty array if source has no sticking or no similar measures found.
+ * The sticking array is deep-copied to each target measure (T-02-09).
+ */
+export function applyStickingToSimilar(groove: GrooveData, sourceMeasureIndex: number): number[] {
+  const sourceSticking = groove.measures[sourceMeasureIndex]?.sticking;
+  if (!sourceSticking || !sourceSticking.some(v => v !== null)) return [];
+
+  return findSimilarMeasures(groove, sourceMeasureIndex);
+}
 
 function sanitizeMetadataValue(value: string, maxLength: number): string {
   return value
@@ -78,6 +137,7 @@ function sanitizeMetadataValue(value: string, maxLength: number): string {
 export default function ProductionPage() {
   const [advancedEditMode] = useState(false);
   const [isNotesOnly, setIsNotesOnly] = useState(false);
+  const [isStickingSetupActive, setIsStickingSetupActive] = useState(false);
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [isMyGroovesModalOpen, setIsMyGroovesModalOpen] = useState(false);
@@ -144,14 +204,12 @@ export default function ProductionPage() {
     // Master volume
     masterVolume,
     setMasterVolume,
+    // Engine for MIDI synth
+    engine,
   } = useGrooveEngine();
 
-  // Create synth instance for MIDI input
-  // Note: useRef to prevent re-initialization on every render
-  const synthRef = useRef(new DrumSynth());
-
-  // Use MIDI Input hook
-  const midiInput = useMIDIInput(synthRef.current);
+  // Use MIDI Input hook (shares synth with GrooveEngine)
+  const midiInput = useMIDIInput(engine?.getSynth());
 
   // Use MIDI Feedback hook for visual feedback
   useMIDIFeedback();
@@ -511,6 +569,63 @@ export default function ProductionPage() {
     analytics.trackMetronomeChange(option);
   };
 
+  const handleStickingSetupToggle = useCallback(() => {
+    setIsStickingSetupActive(prev => !prev);
+  }, []);
+
+  const handleStickingChange = useCallback((measureIndex: number, subdivIndex: number, value: StickingValue) => {
+    const measure = groove.measures[measureIndex];
+    if (!measure) return;
+
+    // Determine subdivision count for this measure
+    const ts = measure.timeSignature || groove.timeSignature;
+    const subdivCount = GrooveUtils.calcNotesPerMeasure(groove.division, ts.beats, ts.noteValue);
+
+    // Validate bounds (T-02-03)
+    if (subdivIndex < 0 || subdivIndex >= subdivCount) return;
+
+    // Build the updated sticking array, validating length invariant (T-02-03)
+    const existingSticking: StickingValue[] = (measure.sticking && measure.sticking.length === subdivCount)
+      ? [...measure.sticking]
+      : createEmptySticking(subdivCount);
+
+    existingSticking[subdivIndex] = value;
+
+    const updatedGroove: GrooveData = {
+      ...groove,
+      measures: groove.measures.map((m, i) =>
+        i === measureIndex ? { ...m, sticking: existingSticking } : m
+      ),
+    };
+    setGroove(updatedGroove);
+  }, [groove, setGroove]);
+
+  /**
+   * Apply sticking from the given measure to all measures with identical note patterns.
+   * Returns a message describing the result (for display in the measure header feedback).
+   * Uses deep copy for each target to prevent shared references (T-02-09).
+   */
+  const handleApplyToSimilar = useCallback((measureIndex: number): string => {
+    const similarIndices = applyStickingToSimilar(groove, measureIndex);
+    if (similarIndices.length === 0) {
+      return 'No similar measures found.';
+    }
+
+    const sourceSticking = groove.measures[measureIndex].sticking!;
+    const updatedGroove: GrooveData = {
+      ...groove,
+      measures: groove.measures.map((m, i) =>
+        similarIndices.includes(i)
+          ? { ...m, sticking: [...sourceSticking] } // T-02-09: deep copy
+          : m
+      ),
+    };
+    setGroove(updatedGroove);
+
+    const count = similarIndices.length;
+    return `Applied to ${count} similar ${count === 1 ? 'measure' : 'measures'}.`;
+  }, [groove, setGroove]);
+
   return (
     <div className="min-h-dvh flex flex-col bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-white">
       <Header
@@ -579,7 +694,7 @@ export default function ProductionPage() {
               />
 
               {/* Metadata Details - Title, Author, Comments */}
-              <div className="-mt-3">
+              <div className={isMetadataEditing ? 'mt-2' : '-mt-3'}>
                 <MetadataFields
                   ref={metadataFieldsRef}
                   title={groove.title || ''}
@@ -594,6 +709,8 @@ export default function ProductionPage() {
                   onDownload={() => { analytics.trackDownloadOpen(); setIsDownloadModalOpen(true); }}
                   onPrint={() => { analytics.trackPrintOpen(); setIsPrintModalOpen(true); }}
                   onShare={() => { analytics.trackShareModalOpen(); setIsShareModalOpen(true); }}
+                  isStickingSetupActive={isStickingSetupActive}
+                  onStickingSetupToggle={handleStickingSetupToggle}
                   isNotesOnly={isNotesOnly}
                 />
               </div>
@@ -625,6 +742,9 @@ export default function ProductionPage() {
                         onMeasureAdd={handleMeasureAdd}
                         onMeasureRemove={handleMeasureRemove}
                         onMeasureClear={handleMeasureClear}
+                        isStickingSetupActive={isStickingSetupActive}
+                        onStickingChange={handleStickingChange}
+                        onApplyToSimilar={handleApplyToSimilar}
                       />
                     </div>
                   </div>
@@ -633,20 +753,7 @@ export default function ProductionPage() {
 
               {!isNotesOnly && (
                 <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-2">
-                    <ClearButton onClear={handleClearAll} />
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center gap-2 h-auto py-2 px-4"
-                    >
-                      <div className="w-4 h-4 flex items-center justify-center font-bold text-sm">
-                        S
-                      </div>
-                      <span className="text-xs uppercase">Stickings</span>
-                    </Button>
-                  </div>
+                  <ClearButton onClear={handleClearAll} />
 
                   <div className="ml-auto">
                     <KeyboardShortcuts inline />

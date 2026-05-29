@@ -2,6 +2,7 @@ import { Play, Pause, Plus } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Slider } from '../ui/slider';
 import { TimeSignature } from '../../types';
+import { useMIDITimingAccuracy } from '../../hooks/useMIDITimingAccuracy';
 
 interface PlaybackControlsProps {
   isPlaying: boolean;
@@ -16,6 +17,11 @@ interface PlaybackControlsProps {
   elapsedTime?: string;
   countdownNumber?: number | null;
   countingInButton?: 'play' | 'playPlus' | null;
+  midiConnected?: boolean;
+  trackingEnabled?: boolean;
+  onTrackingToggle?: () => void;
+  masterVolume?: number;
+  onMasterVolumeChange?: (volume: number) => void;
   isEmbedded?: boolean;
 }
 
@@ -32,8 +38,28 @@ export function PlaybackControls({
   elapsedTime = '0:00',
   countdownNumber,
   countingInButton,
-  isEmbedded = false,
+  isEmbedded,
+  trackingEnabled,
 }: PlaybackControlsProps) {
+  // Use the enhanced MIDI timing accuracy hook
+  const {
+    timingAccuracy: _timingAccuracy,
+    averageScore: _averageScore,
+    showingAverage: _showingAverage,
+  } = useMIDITimingAccuracy(isPlaying, trackingEnabled);
+
+  // Swing display conversion (internal 0–100 maps to DAW convention 50–67%)
+  // 0 = no swing (straight), 100 = triplet swing (2:1 ratio)
+  const swingToDisplay = (v: number) => Math.min(67, Math.max(50, Math.round(50 + v / 6)));
+  const swingToInternal = (v: number) => Math.min(100, Math.max(0, Math.round((v - 50) * 6)));
+
+  // Swing type labels based on display percentage (50–67%)
+  const getSwingType = (displayPercent: number): string => {
+    if (displayPercent < 55) return 'Straight';
+    if (displayPercent < 61) return 'Light Shuffle';
+    return 'Full Triplet';
+  };
+
   return (
     <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-8">
       {/* Time and Play button - centered on mobile, left on desktop */}
@@ -114,13 +140,16 @@ export function PlaybackControls({
         <div className="flex-1 lg:max-w-md">
           <div className="flex items-center justify-between mb-2">
             <label className="text-sm text-slate-500 dark:text-slate-400">Swing</label>
-            <span className="text-sm text-purple-600 dark:text-purple-400 font-semibold">{swing}%</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500 dark:text-slate-500">{getSwingType(swingToDisplay(swing))}</span>
+              <span className="text-sm text-purple-600 dark:text-purple-400 font-semibold">{swingToDisplay(swing)}%</span>
+            </div>
           </div>
           <Slider
-            value={[swing]}
-            onValueChange={(v) => onSwingChange(v[0])}
-            min={0}
-            max={100}
+            value={[swingToDisplay(swing)]}
+            onValueChange={(v) => onSwingChange(swingToInternal(v[0]))}
+            min={50}
+            max={67}
             step={1}
             className="[&_[data-slot=slider-range]]:bg-purple-500 [&_[data-slot=slider-thumb]]:bg-purple-500 [&_[data-slot=slider-thumb]]:border-purple-400 [&_[data-slot=slider-track]]:bg-slate-200 dark:[&_[data-slot=slider-track]]:bg-slate-700"
           />
@@ -129,4 +158,3 @@ export function PlaybackControls({
     </div>
   );
 }
-

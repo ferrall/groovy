@@ -1,6 +1,6 @@
 /**
  * ABC Notation Transcoder
- * 
+ *
  * Converts GrooveData to ABC notation string for sheet music rendering.
  * Supports multi-voice notation with hands (stems up) and feet (stems down).
  */
@@ -51,27 +51,31 @@ function getDecoratedSymbol(voice: DrumVoice): string {
  * Generate ABC symbols for a single position
  * Returns a chord [abc] if multiple voices, single note otherwise
  *
- * For single notes: decoration + symbol + duration (e.g., "!accent!^g2")
- * For chords: decorations before chord, symbols inside (e.g., "!accent![^g c]2")
+ * For single notes: sticking + decoration + symbol + duration (e.g., `^"R"!accent!^g2`)
+ * For chords: sticking + decorations before chord, symbols inside (e.g., `^"R"!accent![^g c]2`)
  *
  * Note: When multiple notes have decorations in a chord, decorations are
  * placed before the chord bracket. This is a limitation of ABC notation.
+ *
+ * Sticking annotations use ABCjs text annotations (^"text") and appear above the staff.
+ * Only non-null, valid sticking values produce annotations (T-02-05).
  */
 function generatePositionABC(
   notes: Record<DrumVoice, boolean[]>,
   position: number,
   voiceFilter: DrumVoice[],
-  durationSuffix: string
+  durationSuffix: string,
+  stickingAnnotation: string = ''
 ): string {
   const activeVoices = getActiveVoicesAtPosition(notes, position, voiceFilter);
 
   if (activeVoices.length === 0) {
-    return ABC_REST + durationSuffix;
+    return stickingAnnotation + ABC_REST + durationSuffix;
   }
 
   if (activeVoices.length === 1) {
-    // Single note: decoration + symbol + duration
-    return getDecoratedSymbol(activeVoices[0]) + durationSuffix;
+    // Single note: sticking + decoration + symbol + duration
+    return stickingAnnotation + getDecoratedSymbol(activeVoices[0]) + durationSuffix;
   }
 
   // Multiple voices at same position: create chord
@@ -83,7 +87,7 @@ function generatePositionABC(
 
   const symbols = activeVoices.map((voice) => ABC_SYMBOLS[voice]);
 
-  return decorations + '[' + symbols.join('') + ']' + durationSuffix;
+  return stickingAnnotation + decorations + '[' + symbols.join('') + ']' + durationSuffix;
 }
 
 /** Number of measures per line in sheet music */
@@ -93,6 +97,7 @@ const MEASURES_PER_LINE = 3;
  * Generate ABC notation for a single voice part (Hands or Feet)
  * Handles multiple measures with measure bars between them
  * Adds line breaks every MEASURES_PER_LINE measures for readability
+ *
  */
 function generateVoicePart(
   groove: GrooveData,
@@ -204,4 +209,3 @@ export const ABCTranscoder = {
   hasHandsNotes,
   hasFeetNotes,
 };
-
