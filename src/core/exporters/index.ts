@@ -1,7 +1,3 @@
-/**
- * Re-export shim — all export logic lives in src/core/exporters/.
- * This file preserves the original import path for existing callers.
- */
 export type {
   ExportProgress,
   ExportFormat,
@@ -9,7 +5,7 @@ export type {
   ImageExportOptions,
   AudioExportOptions,
   ExportMetadata,
-} from './exporters';
+} from './helpers';
 export {
   yieldToMain,
   sanitizeSVG,
@@ -19,8 +15,11 @@ export {
   isFormatSupported,
   getFormatInfo,
   ALL_EXPORT_FORMATS,
-  exportToJSON,
-  downloadAsJSON,
+} from './helpers';
+
+export { exportToJSON, downloadAsJSON } from './exportJSON';
+
+export {
   generateSheetMusicSVG,
   exportToSVG,
   downloadAsSVG,
@@ -28,9 +27,6 @@ export {
   downloadAsPNG,
   exportToPDF,
   downloadAsPDF,
-  DRUM_SAMPLE_FILES,
-  exportToMIDI,
-  downloadAsMIDI,
-  exportToMP3,
-  downloadAsMP3,
-} from './exporters';
+} from './exportImage';
+
+export { DRUM_SAMPLE_FILES, exportToMIDI, downloadAsMIDI, exportToMP3, downloadAsMP3 } from './exportAudio';
