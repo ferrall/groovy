@@ -22,7 +22,7 @@ import {
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { GrooveData } from '../../types';
-import { getShareableURL, getShareableURLWithValidation, URLValidationResult } from '../../core';
+import { getShareableURL, getShareableURLWithValidation, URLValidationResult, escapeXml } from '../../core';
 import { trackShareMethod, trackShareModeToggle } from '../../utils/analytics';
 import { shortenURL, isShortenerConfigured, getShortenerErrorMessage } from '../../services/urlShortener';
 
@@ -42,15 +42,23 @@ const TABS: { id: ShareTab; label: string; icon: React.ReactNode }[] = [
   { id: 'email', label: 'Email', icon: <Mail className="w-4 h-4" /> },
 ];
 
+function defaultUrlModeForTab(tab: ShareTab): 'embed' | 'editor' {
+  return tab === 'embed' ? 'embed' : 'editor';
+}
+
 export function ShareModal({ groove, isOpen, onClose }: ShareModalProps) {
   const [activeTab, setActiveTab] = useState<ShareTab>('link');
   const [copied, setCopied] = useState<'url' | 'embed' | 'shortUrl' | null>(null);
-  const [urlMode, setUrlMode] = useState<'embed' | 'editor'>('embed');
+  const [urlMode, setUrlMode] = useState<'embed' | 'editor'>(defaultUrlModeForTab('link'));
 
-  // URL shortener state
+  // URL shortener state (Link tab)
   const [isShortening, setIsShortening] = useState(false);
   const [shortURL, setShortURL] = useState<string | null>(null);
   const [shortenError, setShortenError] = useState<string | null>(null);
+
+  // QR-specific shortener state — separate from Link tab state (QR-SHORTEN-01)
+  const [qrShortURL, setQrShortURL] = useState<string | null>(null);
+  const [isShorteningQR, setIsShorteningQR] = useState(false);
 
   // Generate shareable URL with validation
   const { url: shareableURL, validation } = useMemo(
@@ -60,11 +68,55 @@ export function ShareModal({ groove, isOpen, onClose }: ShareModalProps) {
 
   const grooveTitle = groove.title || 'Drum Groove';
 
-  // Reset short URL when groove changes
+  // Reset short URLs when shareable URL changes (urlMode toggle or groove change)
   useEffect(() => {
     setShortURL(null);
     setShortenError(null);
+    setQrShortURL(null);
   }, [shareableURL]);
+
+  // Reset urlMode to the tab-appropriate default on every tab switch
+  useEffect(() => {
+    setUrlMode(defaultUrlModeForTab(activeTab));
+  }, [activeTab]);
+
+  // Auto-shorten when QR tab becomes active (QR-SHORTEN-01)
+  useEffect(() => {
+    if (activeTab !== 'qr') return;
+    if (!isShortenerConfigured()) return;
+
+    let cancelled = false;
+    const urlToShorten = shareableURL;
+
+    setIsShorteningQR(true);
+
+    shortenURL(urlToShorten)
+      .then((shortened) => {
+        if (!cancelled) {
+          setQrShortURL(shortened);
+          trackShareMethod('shorten', { urlMode });
+        }
+      })
+      .catch(() => {
+        // On failure, leave qrShortURL null — falls back to long URL + too-long wall
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsShorteningQR(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, shareableURL, urlMode]);
+
+  // Shared clipboard helper — writes text and updates the copied indicator (C3).
+  const copyToClipboard = async (text: string, kind: 'url' | 'embed' | 'shortUrl'): Promise<void> => {
+    await navigator.clipboard.writeText(text);
+    setCopied(kind);
+    setTimeout(() => setCopied(null), 2000);
+  };
 
   // Handle URL shortening
   const handleShortenURL = async () => {
@@ -85,30 +137,24 @@ export function ShareModal({ groove, isOpen, onClose }: ShareModalProps) {
   // Copy short URL to clipboard
   const handleCopyShortURL = async () => {
     if (!shortURL) return;
-    await navigator.clipboard.writeText(shortURL);
-    setCopied('shortUrl');
+    await copyToClipboard(shortURL, 'shortUrl');
     trackShareMethod('link', { urlMode });
-    setTimeout(() => setCopied(null), 2000);
   };
 
   // Generate embed code with embed=true parameter for minimal view
   const embedCode = useMemo(() => {
     const embedURL = getShareableURL(groove, undefined, 'embed');
-    return `<iframe src="${embedURL}" width="600" height="400" frameborder="0" title="${grooveTitle}"></iframe>`;
+    return `<iframe src="${embedURL}" width="600" height="400" frameborder="0" title="${escapeXml(grooveTitle)}"></iframe>`;
   }, [groove, grooveTitle]);
 
   const handleCopyURL = async () => {
-    await navigator.clipboard.writeText(shareableURL);
-    setCopied('url');
+    await copyToClipboard(shareableURL, 'url');
     trackShareMethod('link', { urlMode });
-    setTimeout(() => setCopied(null), 2000);
   };
 
   const handleCopyEmbed = async () => {
-    await navigator.clipboard.writeText(embedCode);
-    setCopied('embed');
+    await copyToClipboard(embedCode, 'embed');
     trackShareMethod('embed', { urlMode });
-    setTimeout(() => setCopied(null), 2000);
   };
 
   const handleSocialShare = (platform: 'twitter' | 'facebook' | 'reddit') => {
@@ -298,14 +344,22 @@ export function ShareModal({ groove, isOpen, onClose }: ShareModalProps) {
   // QR codes have a maximum capacity (~2953 bytes for alphanumeric at level L)
   // URLs over ~2000 chars will likely fail
   const MAX_QR_URL_LENGTH = 2000;
-  const isURLTooLongForQR = shareableURL.length > MAX_QR_URL_LENGTH;
+  // Use the short URL if available; fall back to the long URL.
+  // isURLTooLongForQR is evaluated against qrURL so a successful short URL never
+  // triggers the too-long wall, while the long-URL fallback path still does.
+  const qrURL = qrShortURL ?? shareableURL;
+  const isURLTooLongForQR = qrURL.length > MAX_QR_URL_LENGTH;
 
   const renderQRTab = () => (
     <div className="space-y-4">
       <p className="text-sm text-slate-600 dark:text-slate-400">
         Scan this QR code to open the groove on any device.
       </p>
-      {isURLTooLongForQR ? (
+      {isShorteningQR ? (
+        <div className="flex justify-center items-center p-6 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 min-h-[140px]">
+          <Loader2 className="w-8 h-8 animate-spin text-purple-600 dark:text-purple-400" />
+        </div>
+      ) : isURLTooLongForQR ? (
         <div className="flex flex-col items-center gap-4 p-6 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
           <AlertTriangle className="w-12 h-12 text-amber-500" />
           <div className="text-center">
@@ -321,7 +375,7 @@ export function ShareModal({ groove, isOpen, onClose }: ShareModalProps) {
       ) : (
         <div className="flex justify-center p-6 bg-white rounded-lg border border-slate-200 dark:border-slate-700">
           <QRCodeSVG
-            value={shareableURL}
+            value={qrURL}
             size={200}
             level="M"
             includeMargin

@@ -1,8 +1,10 @@
 import { memo, useCallback, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Copy, Plus, Trash2, X, CopyCheck } from 'lucide-react';
 import { GrooveData, DrumVoice, MAX_MEASURES, StickingValue, createEmptySticking } from '../../types';
 import { GrooveUtils } from '../../core';
 import { useDrumGrid, DRUM_ROWS, NoteChange } from '../../hooks/useDrumGrid';
+import { useKeyboardEditor } from '../../hooks/useKeyboardEditor';
 import BulkOperationsDialog from '../BulkOperationsDialog';
 import NoteIcon from '../NoteIcon';
 import StickingRow from './StickingRow';
@@ -26,11 +28,14 @@ interface DrumCellProps {
   activeVoices: DrumVoice[];
   hasVariations: boolean;
   isNonDefault: boolean;
+  isKeyboardCursor: boolean;
   rowName: string;
+  cellRef: (element: HTMLButtonElement | null) => void;
   onLeftClick: (e: React.MouseEvent) => void;
   onMouseDown: (e: React.MouseEvent) => void;
   onMouseEnter: () => void;
   onRightClick: (e: React.MouseEvent) => void;
+  onFocus: () => void;
   onTouchStart: (e: React.TouchEvent) => void;
   onTouchMove: (e: React.TouchEvent) => void;
   onTouchEnd: (e: React.TouchEvent) => void;
@@ -47,20 +52,26 @@ const DrumCell = memo(function DrumCell({
   activeVoices,
   hasVariations,
   isNonDefault,
+  isKeyboardCursor,
   rowName,
+  cellRef,
   onLeftClick,
   onMouseDown,
   onMouseEnter,
   onRightClick,
+  onFocus,
   onTouchStart,
   onTouchMove,
   onTouchEnd,
 }: DrumCellProps) {
   return (
     <button
+      ref={cellRef}
+      tabIndex={isKeyboardCursor ? 0 : -1}
       className={`drum-cell w-11 h-11 sm:w-12 sm:h-10 md:w-10 md:h-9 border cursor-pointer transition-all duration-150 flex items-center justify-center relative touch-target
         ${isActive ? 'bg-purple-600 hover:bg-purple-700 border-purple-500' : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border-slate-300 dark:border-slate-600'}
         ${isDownbeat ? 'border-l-slate-400 dark:border-l-slate-500' : ''}
+        ${isKeyboardCursor ? 'ring-2 ring-cyan-400 ring-offset-2 ring-offset-white dark:ring-offset-slate-800 z-10' : ''}
       `}
       data-measure-index={measureIndex}
       data-row-index={rowIndex}
@@ -70,6 +81,7 @@ const DrumCell = memo(function DrumCell({
       onMouseDown={onMouseDown}
       onMouseEnter={onMouseEnter}
       onContextMenu={onRightClick}
+      onFocus={onFocus}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
@@ -100,7 +112,13 @@ interface DrumGridDarkProps {
   onStickingChange?: (measureIndex: number, subdivIndex: number, value: StickingValue) => void;
   /** Called when "Apply to Similar Measures" is clicked; receives measure index */
   onApplyToSimilar?: (measureIndex: number) => string;
+  /** Called when the keyboard editor copies the current measure */
+  onMeasureCopy?: (measureIndex: number) => void;
+  /** Called when the keyboard editor pastes the copied measure after the current measure */
+  onMeasurePaste?: (afterIndex: number) => boolean;
 }
+
+const KEYBOARD_HELP_TEXT = 'Keyboard editor. Space plays/pauses. Arrow keys move between cells. Enter toggles the default note. Tab opens variations. Shift or Alt with left and right arrows erases the adjacent cell. Control or Command with left and right arrows duplicates the current note. Control or Command C copies a measure. Control or Command V pastes it to the right.';
 
 export function DrumGridDark({
   groove,
@@ -115,6 +133,8 @@ export function DrumGridDark({
   isStickingSetupActive = false,
   onStickingChange,
   onApplyToSimilar,
+  onMeasureCopy,
+  onMeasurePaste,
 }: DrumGridDarkProps) {
   const grid = useDrumGrid({
     groove,
@@ -127,6 +147,26 @@ export function DrumGridDark({
   const handleStickingChange = useCallback((measureIndex: number, subdivIndex: number, value: StickingValue) => {
     onStickingChange?.(measureIndex, subdivIndex, value);
   }, [onStickingChange]);
+
+  const {
+    keyboardCursor,
+    keyboardVariationIndex,
+    keyboardMessage,
+    cellRefs,
+    getCellKey,
+    registerCellRef,
+    handleKeyboardEditKeyDown,
+    handleKeyboardVariationSelect,
+    setKeyboardCursor,
+  } = useKeyboardEditor({
+    groove,
+    grid,
+    onNoteToggle,
+    onSetNotes,
+    onPreview,
+    onMeasureCopy,
+    onMeasurePaste,
+  });
 
   // Per-measure transient notification for "Apply to Similar" feedback
   const [applyMessages, setApplyMessages] = useState<Record<number, string>>({});
@@ -150,7 +190,30 @@ export function DrumGridDark({
   }, [onApplyToSimilar]);
 
   return (
-    <div className={`flex flex-wrap gap-3 md:gap-4 mt-4 md:mt-6 ${grid.isDragging ? 'select-none' : ''}`}>
+    <div
+      className={`flex flex-wrap gap-3 md:gap-4 mt-4 md:mt-6 ${grid.isDragging ? 'select-none' : ''}`}
+      data-keyboard-editor="true"
+      role="application"
+      aria-label={KEYBOARD_HELP_TEXT}
+      tabIndex={0}
+      onKeyDown={handleKeyboardEditKeyDown}
+      onFocus={(event) => {
+        if (event.currentTarget === event.target) {
+          const cell = cellRefs.current[getCellKey(keyboardCursor)];
+          cell?.focus({ preventScroll: true });
+        }
+      }}
+    >
+      {keyboardMessage && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="w-full text-xs font-medium text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2"
+        >
+          {keyboardMessage}
+        </div>
+      )}
+
       {groove.measures.map((measure, measureIndex) => {
         const positions = grid.getPositionsForMeasure(measureIndex);
         const ts = measure.timeSignature || groove.timeSignature;
@@ -286,6 +349,11 @@ export function DrumGridDark({
                   const variationLabel = grid.getVariationLabel(measureIndex, rowIndex, pos);
                   const isNonDefault = variationLabel !== row.variations[0].label;
                   const activeVoices = grid.getActiveVoices(measureIndex, rowIndex, pos);
+                  const cellCursor = { measureIndex, rowIndex, position: pos };
+                  const isKeyboardCursor =
+                    keyboardCursor.measureIndex === measureIndex &&
+                    keyboardCursor.rowIndex === rowIndex &&
+                    keyboardCursor.position === pos;
 
                   return (
                     <DrumCell
@@ -300,11 +368,14 @@ export function DrumGridDark({
                       activeVoices={activeVoices}
                       hasVariations={hasVariations}
                       isNonDefault={isNonDefault}
+                      isKeyboardCursor={isKeyboardCursor}
                       rowName={row.name}
+                      cellRef={(element) => registerCellRef(cellCursor, element)}
                       onLeftClick={(e) => grid.handleLeftClick(e, measureIndex, rowIndex, pos)}
                       onMouseDown={(e) => grid.handleMouseDown(e, measureIndex, rowIndex, pos)}
                       onMouseEnter={() => grid.handleMouseEnter(measureIndex, rowIndex, pos)}
                       onRightClick={(e) => grid.handleRightClick(e, measureIndex, rowIndex, pos)}
+                      onFocus={() => setKeyboardCursor(cellCursor)}
                       onTouchStart={(e) => grid.handleTouchStart(e, measureIndex, rowIndex, pos)}
                       onTouchMove={grid.handleTouchMove}
                       onTouchEnd={(e) => grid.handleTouchEnd(e, measureIndex, rowIndex, pos)}
@@ -318,9 +389,10 @@ export function DrumGridDark({
       })}
 
       {/* Context Menu */}
-      {grid.contextMenu?.visible && (
+      {grid.contextMenu?.visible && createPortal(
         <div
           ref={grid.contextMenuRef}
+          data-placement={grid.contextMenu.placement}
           className="fixed z-50 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg py-2 min-w-[200px]"
           style={{ left: `${grid.contextMenu.x}px`, top: `${grid.contextMenu.y}px` }}
         >
@@ -335,14 +407,16 @@ export function DrumGridDark({
             );
             const isSelected = variation.voices.length === selectedVoices.length &&
               variation.voices.every(v => selectedVoices.includes(v));
+            const isKeyboardHighlighted = index === keyboardVariationIndex;
 
             return (
               <button
                 key={index}
                 className={`w-full px-3 py-2 text-left text-sm flex items-center justify-between hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors
                   ${isSelected ? 'text-purple-600 dark:text-purple-400' : 'text-slate-700 dark:text-slate-200'}
+                  ${isKeyboardHighlighted ? 'bg-slate-100 dark:bg-slate-600' : ''}
                 `}
-                onClick={() => grid.handleVoiceSelect(variation.voices)}
+                onClick={() => handleKeyboardVariationSelect(index)}
                 onMouseEnter={() => onPreview(variation.voices[0])}
               >
                 <span className="flex items-center gap-2">
@@ -355,7 +429,8 @@ export function DrumGridDark({
               </button>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Bulk Operations Dialog */}

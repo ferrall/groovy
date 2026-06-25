@@ -74,6 +74,18 @@ See: `.planning/PROJECT.md` (updated 2026-05-14)
 
 None currently. Ready to begin Phase 1 planning.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260611-ev2 | Fix top code-review findings (GitHub issues #114-#118) with tests | 2026-06-11 | 6a1c7b6 | [260611-ev2-fix-top-code-review-findings-issues-114-](./quick/260611-ev2-fix-top-code-review-findings-issues-114-/) |
+| 260611-fcv | Fix code-review issues #119-#124 with tests | 2026-06-11 | 3af43e8 | [260611-fcv-fix-code-review-issues-119-124-with-test](./quick/260611-fcv-fix-code-review-issues-119-124-with-test/) |
+| 260611-g5v | Performance & cleanup improvements from code review (#125) | 2026-06-11 | 0688a42 | [260611-g5v-performance-and-cleanup-improvements-fro](./quick/260611-g5v-performance-and-cleanup-improvements-fro/) |
+| 260612-et2 | Migrate URL shortener client to publishable API key (#113) | 2026-06-12 | 8a6ce78 | [260612-et2-migrate-url-shortener-client-to-publisha](./quick/260612-et2-migrate-url-shortener-client-to-publisha/) |
+| 260614-fb9 | Make the URL shortener the default on the QR tab in ShareModal | 2026-06-14 | 9b6f1b1 | [260614-fb9-make-the-url-shortener-the-default-on-th](./quick/260614-fb9-make-the-url-shortener-the-default-on-th/) |
+| 260614-h0t | Per-tab default for the "Share as:" urlMode toggle in ShareModal | 2026-06-14 | acd89e5 | [260614-h0t-in-sharemodal-tsx-make-the-share-as-urlm](./quick/260614-h0t-in-sharemodal-tsx-make-the-share-as-urlm/) |
+| 260624-dy6 | Refactor ProductionPage.tsx: extract useModalState, useMeasureOperations, usePlaybackState, useStickingState hooks | 2026-06-24 | a3e5c85 | [260624-dy6-refactor-productionpage-tsx-extract-usem](./quick/260624-dy6-refactor-productionpage-tsx-extract-usem/) |
+
 ## Next Steps
 
 1. Plan Phase 1: React Event Handler Cleanup
@@ -93,3 +105,5 @@ None currently. Ready to begin Phase 1 planning.
 - Discussion log: `.planning/phases/01-react-cleanup/01-DISCUSSION-LOG.md`
 - Decisions captured: 4 (Handler Lifecycle, Listener Dependencies, Cleanup Strategy, Memory Verification)
 - Next: Plan Phase 1
+
+Last activity: 2026-06-14 - Completed quick task 260614-h0t: Per-tab default for the "Share as:" urlMode toggle in ShareModal

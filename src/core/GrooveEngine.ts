@@ -1,6 +1,7 @@
-import { GrooveData, DrumVoice, ALL_DRUM_VOICES, getFlattenedNotes, MetronomeFrequency, MetronomeOffsetClick, MetronomeConfig, DEFAULT_METRONOME_CONFIG } from '../types';
+import { GrooveData, DrumVoice, ALL_DRUM_VOICES, getFlattenedNotes, MetronomeFrequency, MetronomeOffsetClick, MetronomeConfig } from '../types';
 import { DrumSynth } from './DrumSynth';
 import { GrooveUtils } from './GrooveUtils';
+import { MetronomeManager } from './MetronomeManager';
 import { logger } from '../utils/logger';
 
 export type SyncMode = 'start' | 'middle' | 'end';
@@ -22,13 +23,9 @@ function calculateSwingOffset(
   _division: number,
   swing: number
 ): number {
-  // Swing only affects off-beat notes (odd positions in 16th notes)
   if (position % 2 === 0) {
     return 0;
   }
-  
-  // Off-beat notes: delay based on swing amount
-  // Convert swing percentage to ratio (0-100 -> 0-0.33)
   const swingRatio = (swing / 100) * 0.33;
   return swingRatio;
 }
@@ -39,193 +36,130 @@ function calculateSwingOffset(
  */
 export class GrooveEngine {
   private synth: DrumSynth;
-  private scheduledNotes: number[] = [];
   private isPlaying = false;
   private startTime = 0;
   private currentPosition = 0;
   private timerID: number | null = null;
+  private endStopTimerID: number | null = null;
   private syncMode: SyncMode = 'middle';
   private currentGroove: GrooveData | null = null;
   private pendingGroove: GrooveData | null = null;
   private loopEnabled = true;
-  private baseScheduleAheadTime = 0.15; // Base 150ms schedule-ahead time
+  private baseScheduleAheadTime = 0.15;
 
-  // Visual update state (RAF-based for performance)
   private visualRAFId: number | null = null;
   private lastEmittedPosition: number = -1;
 
-  // Metronome state
-  private metronomeConfig: MetronomeConfig = { ...DEFAULT_METRONOME_CONFIG };
-  private currentRotationOffset = 0; // For ROTATE mode
-  private loopCount = 0; // Track loops for rotation
+  // Performance.now() anchor captured at the instant playback begins.
+  // Shared with useMIDITracking so PerformanceTracker uses the same clock.
+  private playStartPerformanceTime: number | null = null;
 
-  // Event listeners
+  private readonly metronome = new MetronomeManager();
+
   private listeners: Partial<GrooveEngineEvents> = {};
-  
+
   constructor(synth?: DrumSynth) {
     this.synth = synth || new DrumSynth();
   }
 
-  /**
-   * Get the synth instance for external use (e.g., MIDI input)
-   */
   getSynth(): DrumSynth {
     return this.synth;
   }
 
   /**
-   * Register event listeners
+   * Get the performance.now() timestamp captured at the start of playback.
+   * Returns null when not playing or before the first play() call.
    */
-  on<K extends keyof GrooveEngineEvents>(
-    event: K,
-    callback: GrooveEngineEvents[K]
-  ): void {
+  getPlayStartPerformanceTime(): number | null {
+    return this.playStartPerformanceTime;
+  }
+
+  on<K extends keyof GrooveEngineEvents>(event: K, callback: GrooveEngineEvents[K]): void {
     this.listeners[event] = callback;
   }
-  
-  /**
-   * Remove event listener
-   */
+
   off<K extends keyof GrooveEngineEvents>(event: K): void {
     delete this.listeners[event];
   }
-  
-  /**
-   * Emit an event with proper type safety
-   */
+
   private emit<K extends keyof GrooveEngineEvents>(
     event: K,
     ...args: Parameters<GrooveEngineEvents[K]>
   ): void {
     const listener = this.listeners[event];
     if (listener) {
-      // Type assertion for callback function with proper parameter types
       (listener as (...callbackArgs: typeof args) => void)(...args);
     }
   }
-  
-  /**
-   * Set the sync mode for visual updates
-   */
+
   setSyncMode(mode: SyncMode): void {
     this.syncMode = mode;
   }
-  
-  /**
-   * Get current sync mode
-   */
+
   getSyncMode(): SyncMode {
     return this.syncMode;
   }
 
-  // ===== Metronome Methods =====
+  // ===== Metronome delegation =====
 
-  /**
-   * Set metronome frequency
-   */
   setMetronomeFrequency(frequency: MetronomeFrequency): void {
-    this.metronomeConfig.frequency = frequency;
+    this.metronome.setFrequency(frequency);
   }
 
-  /**
-   * Get metronome frequency
-   */
   getMetronomeFrequency(): MetronomeFrequency {
-    return this.metronomeConfig.frequency;
+    return this.metronome.getFrequency();
   }
 
-  /**
-   * Set metronome solo mode
-   */
   setMetronomeSolo(solo: boolean): void {
-    this.metronomeConfig.solo = solo;
+    this.metronome.setSolo(solo);
   }
 
-  /**
-   * Get metronome solo mode
-   */
   getMetronomeSolo(): boolean {
-    return this.metronomeConfig.solo;
+    return this.metronome.getSolo();
   }
 
-  /**
-   * Set metronome count-in
-   */
   setMetronomeCountIn(countIn: boolean): void {
-    this.metronomeConfig.countIn = countIn;
+    this.metronome.setCountIn(countIn);
   }
 
-  /**
-   * Get metronome count-in
-   */
   getMetronomeCountIn(): boolean {
-    return this.metronomeConfig.countIn;
+    return this.metronome.getCountIn();
   }
 
-  /**
-   * Set metronome offset click
-   */
   setMetronomeOffsetClick(offsetClick: MetronomeOffsetClick): void {
-    this.metronomeConfig.offsetClick = offsetClick;
-    this.currentRotationOffset = 0; // Reset rotation when manually setting
+    this.metronome.setOffsetClick(offsetClick);
   }
 
-  /**
-   * Get metronome offset click
-   */
   getMetronomeOffsetClick(): MetronomeOffsetClick {
-    return this.metronomeConfig.offsetClick;
+    return this.metronome.getOffsetClick();
   }
 
-  /**
-   * Set metronome volume (0-100)
-   */
   setMetronomeVolume(volume: number): void {
-    this.metronomeConfig.volume = Math.max(0, Math.min(100, volume));
+    this.metronome.setVolume(volume);
   }
 
-  /**
-   * Get metronome volume
-   */
   getMetronomeVolume(): number {
-    return this.metronomeConfig.volume;
+    return this.metronome.getVolume();
   }
 
-  /**
-   * Get full metronome config
-   */
   getMetronomeConfig(): MetronomeConfig {
-    return { ...this.metronomeConfig };
+    return this.metronome.getConfig();
   }
 
-  /**
-   * Set full metronome config
-   */
   setMetronomeConfig(config: Partial<MetronomeConfig>): void {
-    this.metronomeConfig = { ...this.metronomeConfig, ...config };
-    if (config.offsetClick !== undefined) {
-      this.currentRotationOffset = 0;
-    }
+    this.metronome.setConfig(config);
   }
 
-  // ===== End Metronome Methods =====
+  // ===== Volume =====
 
-  /**
-   * Set master volume (0-1)
-   */
   setMasterVolume(volume: number): void {
     const clampedVolume = Math.max(0, Math.min(1, volume));
     this.synth.setMasterVolume(clampedVolume);
   }
 
-  /**
-   * Get master volume
-   */
   getMasterVolume(): number {
     return this.synth.getMasterVolume();
   }
-
-  // ===== End Master Volume Methods =====
 
   /**
    * Update the groove during playback
@@ -233,236 +167,115 @@ export class GrooveEngine {
    * Validates division compatibility and auto-corrects if needed
    */
   updateGroove(groove: GrooveData): void {
-    // Validate division compatibility with time signature
+    let corrected: GrooveData = groove;
+
     if (!GrooveUtils.isDivisionCompatible(
-      groove.division,
-      groove.timeSignature.beats,
-      groove.timeSignature.noteValue
+      corrected.division,
+      corrected.timeSignature.beats,
+      corrected.timeSignature.noteValue
     )) {
       logger.warn(
-        `Division ${groove.division} is incompatible with ${groove.timeSignature.beats}/${groove.timeSignature.noteValue} time. ` +
+        `Division ${corrected.division} is incompatible with ${corrected.timeSignature.beats}/${corrected.timeSignature.noteValue} time. ` +
         `Auto-correcting to compatible division.`
       );
-      groove.division = GrooveUtils.getDefaultDivision(
-        groove.timeSignature.beats,
-        groove.timeSignature.noteValue
-      );
+      corrected = {
+        ...corrected,
+        division: GrooveUtils.getDefaultDivision(
+          corrected.timeSignature.beats,
+          corrected.timeSignature.noteValue
+        ),
+      };
     }
 
-    // Auto-disable swing for triplets and quarter notes
-    if (!GrooveUtils.doesDivisionSupportSwing(groove.division)) {
-      if (groove.swing > 0) {
-        logger.info(`Swing disabled for division ${groove.division} (triplets/quarter notes don't support swing)`);
-        groove.swing = 0;
+    if (!GrooveUtils.doesDivisionSupportSwing(corrected.division)) {
+      if (corrected.swing > 0) {
+        logger.info(`Swing disabled for division ${corrected.division} (triplets/quarter notes don't support swing)`);
+        corrected = { ...corrected, swing: 0 };
       }
     }
 
     if (this.isPlaying) {
-      this.pendingGroove = groove;
+      this.pendingGroove = corrected;
     } else {
-      this.currentGroove = groove;
-      this.emit('grooveChange', groove);
+      this.currentGroove = corrected;
+      this.emit('grooveChange', corrected);
     }
   }
-  
-  /**
-   * Get current groove
-   */
+
   getCurrentGroove(): GrooveData | null {
     return this.currentGroove;
   }
-  
-  /**
-   * Check if there are pending changes
-   */
+
   hasPendingChanges(): boolean {
     return this.pendingGroove !== null;
   }
-  
-  /**
-   * Start playback
-   */
+
   async play(groove: GrooveData, loop: boolean = true): Promise<void> {
     await this.synth.resume();
 
-    if (this.isPlaying) {
-      return;
-    }
+    if (this.isPlaying) return;
 
     this.isPlaying = true;
     this.currentPosition = 0;
     this.startTime = this.synth.getCurrentTime();
+    this.playStartPerformanceTime = performance.now();
     this.currentGroove = groove;
     this.pendingGroove = null;
     this.loopEnabled = loop;
 
-    // Reset metronome rotation state
-    this.loopCount = 0;
-    this.currentRotationOffset = 0;
+    if (this.endStopTimerID !== null) {
+      clearTimeout(this.endStopTimerID);
+      this.endStopTimerID = null;
+    }
 
+    this.metronome.resetRotation();
     this.emit('playbackStateChange', true);
 
-    // Start audio scheduling and visual update loops
     this.scheduleLoop();
     this.startVisualLoop();
   }
 
-  /**
-   * Check if a metronome click should play at the given position
-   * Returns 'accent' for beat 1, 'normal' for other beats, or null for no click
-   */
-  private shouldPlayMetronome(
-    positionInMeasure: number,
-    division: number,
-    timeSignature: { beats: number; noteValue: number },
-    notesPerMeasure: number
-  ): 'accent' | 'normal' | null {
-    const { frequency, offsetClick } = this.metronomeConfig;
-
-    if (frequency === 0) {
-      return null;
-    }
-
-    // Calculate positions per beat based on time signature
-    const positionsPerBeat = notesPerMeasure / timeSignature.beats;
-
-    // Calculate the metronome interval (how many positions between clicks)
-    // frequency is 4, 8, or 16 (notes per bar in 4/4)
-    // We need to convert this to positions based on current division
-    const metronomeDivision = frequency;
-    const clicksPerBeat = metronomeDivision / 4; // 4th=1, 8th=2, 16th=4 clicks per beat
-    const positionsPerClick = positionsPerBeat / clicksPerBeat;
-
-    // Determine the offset in positions based on offsetClick setting
-    let offsetPositions = 0;
-    const isTriplet = division === 12 || division === 24 || division === 48;
-
-    if (offsetClick === 'ROTATE') {
-      // In ROTATE mode, use the current rotation offset
-      const rotationOptions = isTriplet ? ['1', 'TI', 'TA'] : ['1', 'E', 'AND', 'A'];
-      const currentOffset = rotationOptions[this.currentRotationOffset % rotationOptions.length] as MetronomeOffsetClick;
-      offsetPositions = this.getOffsetPositions(currentOffset, positionsPerBeat, isTriplet);
-    } else {
-      offsetPositions = this.getOffsetPositions(offsetClick, positionsPerBeat, isTriplet);
-    }
-
-    // Check if this position should have a click
-    // First, shift the position by the offset
-    const adjustedPosition = (positionInMeasure - offsetPositions + notesPerMeasure) % notesPerMeasure;
-
-    // Check if this adjusted position falls on a click point
-    if (adjustedPosition % positionsPerClick !== 0) {
-      return null;
-    }
-
-    // Determine if this is beat 1 (accent) or other beat (normal)
-    // Beat 1 is when adjustedPosition is 0 (first click of the measure)
-    if (adjustedPosition === 0) {
-      return 'accent';
-    }
-
-    return 'normal';
-  }
-
-  /**
-   * Get offset positions for a given offset click setting
-   */
-  private getOffsetPositions(
-    offsetClick: MetronomeOffsetClick,
-    positionsPerBeat: number,
-    isTriplet: boolean
-  ): number {
-    if (isTriplet) {
-      switch (offsetClick) {
-        case 'TI':
-          return Math.floor(positionsPerBeat / 3); // Second triplet note
-        case 'TA':
-          return Math.floor((positionsPerBeat * 2) / 3); // Third triplet note
-        default:
-          return 0;
-      }
-    } else {
-      switch (offsetClick) {
-        case 'E':
-          return Math.floor(positionsPerBeat / 4); // Second 16th
-        case 'AND':
-          return Math.floor(positionsPerBeat / 2); // Second 8th
-        case 'A':
-          return Math.floor((positionsPerBeat * 3) / 4); // Fourth 16th
-        default:
-          return 0;
-      }
-    }
-  }
-
-  /**
-   * Main scheduling loop
-   */
   private scheduleLoop(): void {
-    if (!this.isPlaying) {
-      return;
-    }
+    if (!this.isPlaying) return;
 
     const currentTime = this.synth.getCurrentTime();
     const activeGroove = this.currentGroove!;
 
-    // Calculate note duration based on tempo and division
     const beatDuration = 60 / activeGroove.tempo;
     const noteDuration = beatDuration / (activeGroove.division / 4);
-
-    // Get total positions across all measures
     const totalPositions = GrooveUtils.getTotalPositions(activeGroove);
-
-    // Get flattened notes for multi-measure playback
     const flatNotes = getFlattenedNotes(activeGroove);
 
     // Adaptive schedule-ahead time: reduce at high tempos to reduce audio node accumulation
-    // Consider both tempo AND division (more notes = more nodes)
     let effectiveScheduleAheadTime = this.baseScheduleAheadTime;
     const notesPerSecond = (activeGroove.tempo * activeGroove.division) / (4 * 60);
 
     if (notesPerSecond > 32) {
-      // Very high note rate (e.g., 240 BPM / 1/8 or 180 BPM / 1/16)
-      effectiveScheduleAheadTime = 0.05; // 50ms - aggressive scheduling
+      effectiveScheduleAheadTime = 0.05;
     } else if (notesPerSecond > 24) {
-      // High note rate (e.g., 240 BPM / 1/16)
-      effectiveScheduleAheadTime = 0.065; // 65ms
+      effectiveScheduleAheadTime = 0.065;
     } else if (notesPerSecond > 16) {
-      // Moderate-high note rate
-      effectiveScheduleAheadTime = 0.08; // 80ms
+      effectiveScheduleAheadTime = 0.08;
     } else if (activeGroove.tempo > 180) {
-      effectiveScheduleAheadTime = 0.1; // 100ms for fast tempos
+      effectiveScheduleAheadTime = 0.1;
     } else if (activeGroove.tempo > 150) {
-      effectiveScheduleAheadTime = 0.12; // 120ms for moderate tempos
+      effectiveScheduleAheadTime = 0.12;
     }
 
-    // Schedule notes that should play in the next scheduleAheadTime window
     while (true) {
-      // Calculate absolute position within the full groove
       const absolutePosition = this.currentPosition % totalPositions;
-
-      // Calculate time for this position
       const noteTime = this.startTime + (this.currentPosition * noteDuration);
 
-      // Stop scheduling if we're too far ahead
-      if (noteTime > currentTime + effectiveScheduleAheadTime) {
-        break;
-      }
+      if (noteTime > currentTime + effectiveScheduleAheadTime) break;
 
-      // Get measure-relative position for swing calculation
       const { measureIndex, positionInMeasure } = GrooveUtils.absoluteToMeasurePosition(activeGroove, absolutePosition);
 
-      // Calculate swing offset
-      const swingOffset = calculateSwingOffset(
-        positionInMeasure,
-        activeGroove.division,
-        activeGroove.swing
-      );
-
+      const swingOffset = calculateSwingOffset(positionInMeasure, activeGroove.division, activeGroove.swing);
       const playTime = noteTime + (swingOffset * noteDuration);
 
-      // Schedule groove notes (unless solo mode is active)
-      if (!this.metronomeConfig.solo) {
+      const metronomeConfig = this.metronome.getConfig();
+
+      if (!metronomeConfig.solo) {
         ALL_DRUM_VOICES.forEach((voice) => {
           if (flatNotes[voice]?.[absolutePosition]) {
             this.synth.playDrum(voice, playTime - currentTime, 100);
@@ -470,8 +283,7 @@ export class GrooveEngine {
         });
       }
 
-      // Schedule metronome click if needed
-      if (this.metronomeConfig.frequency > 0) {
+      if (metronomeConfig.frequency > 0) {
         const measure = activeGroove.measures[measureIndex];
         const timeSignature = measure?.timeSignature || activeGroove.timeSignature;
         const notesPerMeasure = GrooveUtils.calcNotesPerMeasure(
@@ -480,7 +292,7 @@ export class GrooveEngine {
           timeSignature.noteValue
         );
 
-        const clickType = this.shouldPlayMetronome(
+        const clickType = this.metronome.shouldPlayClick(
           positionInMeasure,
           activeGroove.division,
           timeSignature,
@@ -491,34 +303,26 @@ export class GrooveEngine {
           const voice: DrumVoice = clickType === 'accent'
             ? 'hihat-metronome-accent'
             : 'hihat-metronome-normal';
-          // Convert metronome volume (0-100) to velocity (0-127)
-          const velocity = Math.round((this.metronomeConfig.volume / 100) * 127);
+          const velocity = Math.round((metronomeConfig.volume / 100) * 127);
           this.synth.playDrum(voice, playTime - currentTime, velocity);
         }
       }
 
-      // Visual updates are handled by RAF loop (startVisualLoop)
-
       this.currentPosition++;
 
-      // Check if we've completed a full loop through all measures
       if (absolutePosition === totalPositions - 1) {
         if (!this.loopEnabled) {
-          this.stop();
+          const grooveEndTime = this.startTime + totalPositions * noteDuration;
+          const delayMs = Math.max(0, (grooveEndTime - currentTime) * 1000);
+          if (this.endStopTimerID !== null) {
+            clearTimeout(this.endStopTimerID);
+          }
+          this.endStopTimerID = window.setTimeout(() => this.stop(), delayMs);
           return;
         }
 
-        // Increment loop count and update rotation offset if in ROTATE mode
-        this.loopCount++;
-        if (this.metronomeConfig.offsetClick === 'ROTATE') {
-          const isTriplet = activeGroove.division === 12 ||
-                           activeGroove.division === 24 ||
-                           activeGroove.division === 48;
-          const rotationOptions = isTriplet ? 3 : 4;
-          this.currentRotationOffset = (this.currentRotationOffset + 1) % rotationOptions;
-        }
+        this.metronome.onLoopComplete(activeGroove.division);
 
-        // Apply pending groove changes at the end of the loop
         if (this.pendingGroove) {
           const nextLoopStartTime = this.startTime + (this.currentPosition * noteDuration);
           this.currentGroove = this.pendingGroove;
@@ -530,76 +334,50 @@ export class GrooveEngine {
       }
     }
 
-    // Schedule next check (50ms interval reduces CPU usage while maintaining timing accuracy)
     this.timerID = window.setTimeout(() => this.scheduleLoop(), 50);
   }
 
-  /**
-   * Start the RAF-based visual update loop
-   * Uses requestAnimationFrame for smooth 60fps visual updates
-   * instead of scheduling individual timeouts for each position
-   */
   private startVisualLoop(): void {
     const update = () => {
-      if (!this.isPlaying || !this.currentGroove) {
-        return;
-      }
+      if (!this.isPlaying || !this.currentGroove) return;
 
       const currentTime = this.synth.getCurrentTime();
       const groove = this.currentGroove;
 
-      // Calculate note duration
       const beatDuration = 60 / groove.tempo;
       const noteDuration = beatDuration / (groove.division / 4);
       const totalPositions = GrooveUtils.getTotalPositions(groove);
 
-      // Calculate elapsed time since playback started
       const elapsed = currentTime - this.startTime;
 
-      // Apply sync mode offset to visual timing
       let syncOffset = 0;
       switch (this.syncMode) {
-        case 'middle':
-          syncOffset = noteDuration / 2;
-          break;
-        case 'end':
-          syncOffset = noteDuration;
-          break;
-        // 'start' has no offset
+        case 'middle': syncOffset = noteDuration / 2; break;
+        case 'end': syncOffset = noteDuration; break;
       }
 
-      // Calculate current visual position
       const adjustedElapsed = elapsed + syncOffset;
       let visualPosition = Math.floor(adjustedElapsed / noteDuration);
 
-      // Handle looping - wrap position within total positions
       if (this.loopEnabled && visualPosition >= 0) {
         visualPosition = visualPosition % totalPositions;
       } else if (visualPosition >= totalPositions) {
-        // Non-looping mode and past end
         visualPosition = totalPositions - 1;
       }
 
-      // Clamp to valid range
       visualPosition = Math.max(0, Math.min(visualPosition, totalPositions - 1));
 
-      // Only emit if position changed
       if (visualPosition !== this.lastEmittedPosition) {
         this.lastEmittedPosition = visualPosition;
         this.emit('positionChange', visualPosition);
       }
 
-      // Continue the loop
       this.visualRAFId = requestAnimationFrame(update);
     };
 
-    // Start the RAF loop
     this.visualRAFId = requestAnimationFrame(update);
   }
 
-  /**
-   * Stop the RAF-based visual update loop
-   */
   private stopVisualLoop(): void {
     if (this.visualRAFId !== null) {
       cancelAnimationFrame(this.visualRAFId);
@@ -608,39 +386,31 @@ export class GrooveEngine {
     this.lastEmittedPosition = -1;
   }
 
-  /**
-   * Stop playback
-   */
   stop(): void {
     this.isPlaying = false;
     this.currentPosition = 0;
+    this.playStartPerformanceTime = null;
 
     if (this.timerID !== null) {
       clearTimeout(this.timerID);
       this.timerID = null;
     }
 
-    // Stop visual update loop
-    this.stopVisualLoop();
+    if (this.endStopTimerID !== null) {
+      clearTimeout(this.endStopTimerID);
+      this.endStopTimerID = null;
+    }
 
-    // Clear scheduled notes
-    this.scheduledNotes.forEach((id) => clearTimeout(id));
-    this.scheduledNotes = [];
+    this.stopVisualLoop();
 
     this.emit('playbackStateChange', false);
     this.emit('positionChange', -1);
   }
 
-  /**
-   * Check if currently playing
-   */
   getIsPlaying(): boolean {
     return this.isPlaying;
   }
 
-  /**
-   * Get current tempo
-   */
   getTempo(): number {
     return this.currentGroove?.tempo ?? 120;
   }
@@ -652,52 +422,39 @@ export class GrooveEngine {
   setTempo(tempo: number): void {
     if (!this.currentGroove) return;
 
-    // Clamp tempo to valid range
     const clampedTempo = Math.max(30, Math.min(300, tempo));
 
     if (this.isPlaying) {
-      // Calculate current time offset before tempo change
       const currentTime = this.synth.getCurrentTime();
       const oldBeatDuration = 60 / this.currentGroove.tempo;
       const oldNoteDuration = oldBeatDuration / (this.currentGroove.division / 4);
       const elapsedTime = currentTime - this.startTime;
       const elapsedPositions = elapsedTime / oldNoteDuration;
 
-      // Update tempo
       this.currentGroove = { ...this.currentGroove, tempo: clampedTempo };
 
-      // Recalculate start time to maintain smooth transition
       const newBeatDuration = 60 / clampedTempo;
       const newNoteDuration = newBeatDuration / (this.currentGroove.division / 4);
       this.startTime = currentTime - (elapsedPositions * newNoteDuration);
 
-      // Also update pending groove if exists
       if (this.pendingGroove) {
         this.pendingGroove = { ...this.pendingGroove, tempo: clampedTempo };
       }
 
       this.emit('grooveChange', this.currentGroove);
     } else {
-      // Not playing - just update the groove
       this.currentGroove = { ...this.currentGroove, tempo: clampedTempo };
       this.emit('grooveChange', this.currentGroove);
     }
   }
 
-  /**
-   * Play a single drum hit (for preview)
-   */
   async playPreview(voice: DrumVoice): Promise<void> {
     await this.synth.resume();
     this.synth.playDrum(voice, 0, 100);
   }
 
-  /**
-   * Clean up resources
-   */
   dispose(): void {
     this.stop();
     this.listeners = {};
   }
 }
-
